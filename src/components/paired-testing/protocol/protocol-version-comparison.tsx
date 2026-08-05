@@ -1,5 +1,9 @@
+"use client";
+
 import { ArrowRight, Check, GitCompareArrows, Minus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Protocol } from "@/lib/data/protocols";
 import type { Json } from "@/types/database.types";
 
@@ -119,6 +123,7 @@ function ChangeIcon({ kind }: { kind: ChangeKind }) {
 }
 
 export function ProtocolVersionComparison({ active, draft }: { active: Protocol; draft: Protocol }) {
+  const navigation = useProtocolDraftNavigation();
   const changes = changesBetween(active, draft);
   const sections = [...new Set(changes.map((change) => change.section))];
 
@@ -127,6 +132,7 @@ export function ProtocolVersionComparison({ active, draft }: { active: Protocol;
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Version comparison</p><h2 className="mt-1.5 flex items-center gap-2 text-lg font-semibold"><GitCompareArrows className="size-4 text-primary" />{active.version} to {draft.version}</h2><p className="mt-2 text-xs text-muted-foreground">Changes in the draft compared with the protocol that remains active.</p></div><Badge variant={changes.length ? "outline" : "secondary"}>{changes.length} {changes.length === 1 ? "change" : "changes"}</Badge></div>
       {draft.change_summary ? <div className="border-l-2 border-primary pl-3"><p className="text-[10px] text-muted-foreground">Change summary</p><p className="mt-1 text-sm">{draft.change_summary}</p></div> : null}
       {!changes.length ? <div className="flex items-center gap-2 rounded-md border border-border p-4 text-sm text-muted-foreground"><Check className="size-4 text-primary" />The draft currently matches {active.version}.</div> : <div className="divide-y divide-border rounded-md border border-border">{sections.map((section) => <div key={section} className="grid gap-3 p-4 md:grid-cols-[180px_minmax(0,1fr)]"><h3 className="text-xs font-semibold">{section}</h3><div className="space-y-2">{changes.filter((change) => change.section === section).map((change) => <div key={`${change.kind}-${change.field}`} className="flex items-start gap-2 text-xs"><ChangeIcon kind={change.kind} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{change.field}</span><Badge variant="outline" className="text-[10px] capitalize">{change.kind}</Badge></div>{change.kind === "changed" ? <p className="mt-1 break-words text-muted-foreground"><span className="line-through">{change.before}</span><ArrowRight className="mx-1 inline size-3" />{change.after}</p> : null}</div></div>)}</div></div>)}</div>}
+      <div className="flex justify-end"><Button type="button" onClick={() => navigation?.goToWorkspace("review")}>Continue to review <ArrowRight className="size-4" /></Button></div>
     </section>
   );
 }

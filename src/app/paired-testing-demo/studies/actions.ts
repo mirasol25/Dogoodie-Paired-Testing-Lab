@@ -32,7 +32,7 @@ export async function createStudyAction(input: unknown): Promise<StudyActionResu
 }
 
 export async function selectStudyAction(studyId: string): Promise<StudyActionResult> {
-  await requireRole(["admin", "test_coordinator", "expert_reviewer", "law_firm_viewer"], "/paired-testing-demo");
+  await requireRole(["admin", "test_coordinator", "tester", "expert_reviewer", "law_firm_viewer"], "/paired-testing-demo");
   const study = await getAccessibleStudyById(studyId);
   if (!study) return { ok: false, message: "The selected study is unavailable." };
   (await cookies()).set(ACTIVE_STUDY_COOKIE, study.id, {

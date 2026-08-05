@@ -35,7 +35,7 @@ function ProtocolHistory({ protocols, selectedId }: { protocols: Protocol[]; sel
   );
 }
 
-export function ProtocolManager({ study, protocols, canManage, accessRole, selectedVersion }: { study: Study; protocols: Protocol[]; canManage: boolean; accessRole: AppRole; selectedVersion?: string }) {
+export function ProtocolManager({ study, protocols, canManage, accessRole, selectedVersion, initialConfigureStep = "details" }: { study: Study; protocols: Protocol[]; canManage: boolean; accessRole: AppRole; selectedVersion?: string; initialConfigureStep?: "details" | "conditions" }) {
   const canEdit = canManage && !["completed", "archived"].includes(study.status);
   const activeProtocol = protocols.find((protocol) => protocol.status === "active") ?? null;
   const draftProtocol = protocols.find((protocol) => protocol.status === "draft") ?? null;
@@ -65,20 +65,21 @@ export function ProtocolManager({ study, protocols, canManage, accessRole, selec
       {!currentProtocol && canEdit ? <CreateProtocolDetails study={{ id: study.id, name: study.name, studyCode: study.study_code, studyQuestion: study.study_question, isolatedVariable: study.isolated_variable }} /> : null}
       {!currentProtocol && !canEdit ? <section className="border-y border-border py-12 text-center"><FileCheck2 className="mx-auto size-6 text-muted-foreground" /><h2 className="mt-3 text-base font-semibold">No testing protocol yet</h2><p className="mt-2 text-sm text-muted-foreground">This study does not have a protocol available for review.</p></section> : null}
 
-      {currentProtocol?.status === "draft" && canEdit ? <ProtocolDraftWorkspace
+      {currentProtocol?.status === "draft" && canEdit && !viewingSelectedVersion ? <ProtocolDraftWorkspace
         version={currentProtocol.version}
+        initialConfigureStep={initialConfigureStep}
         discard={<DiscardProtocolDraft studyId={study.id} protocolId={currentProtocol.id} version={currentProtocol.version} hasActiveVersion={Boolean(activeProtocol)} />}
         details={<EditProtocolDetails protocol={currentProtocol} />}
         conditions={<MatchingControlsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} />}
         thresholds={<ValidationThresholdsForm studyId={study.id} protocolId={currentProtocol.id} configuration={currentProtocol.validation_configuration} />}
         requirements={<RequirementsForm studyId={study.id} protocolId={currentProtocol.id} evidenceRequirements={currentProtocol.evidence_requirements} validationConfiguration={currentProtocol.validation_configuration} fixedControls={currentProtocol.fixed_controls} />}
-        exclusions={<ExclusionConditionsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} evidenceRequirements={currentProtocol.evidence_requirements} validationConfiguration={currentProtocol.validation_configuration} exclusionConditions={currentProtocol.exclusion_conditions} />}
+        exclusions={<ExclusionConditionsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} evidenceRequirements={currentProtocol.evidence_requirements} validationConfiguration={currentProtocol.validation_configuration} exclusionConditions={currentProtocol.exclusion_conditions} hasComparison={Boolean(activeProtocol)} />}
         comparison={activeProtocol ? <ProtocolVersionComparison active={activeProtocol} draft={currentProtocol} /> : undefined}
         preview={<ActiveProtocolView protocol={currentProtocol} studyCode={study.study_code} />}
         activation={<ProtocolActivation studyId={study.id} protocol={{ id: currentProtocol.id, title: currentProtocol.title, protocolCode: currentProtocol.protocol_code, version: currentProtocol.version, studyQuestion: currentProtocol.study_question, isolatedVariable: currentProtocol.isolated_variable, testerAValue: currentProtocol.tester_a_value, testerBValue: currentProtocol.tester_b_value, fixedControls: currentProtocol.fixed_controls, evidenceRequirements: currentProtocol.evidence_requirements, validationConfiguration: currentProtocol.validation_configuration, exclusionConditions: currentProtocol.exclusion_conditions }} />}
       /> : null}
 
-      {currentProtocol?.status === "draft" && !canEdit ? <ActiveProtocolView protocol={currentProtocol} studyCode={study.study_code} /> : null}
+      {currentProtocol?.status === "draft" && (!canEdit || viewingSelectedVersion) ? <ProtocolReadWorkspace document={<ActiveProtocolView protocol={currentProtocol} studyCode={study.study_code} />} history={history} /> : null}
       {currentProtocol && currentProtocol.status !== "draft" ? <ProtocolReadWorkspace document={<ActiveProtocolView protocol={currentProtocol} studyCode={study.study_code} />} history={history} /> : null}
       {currentProtocol?.status === "draft" ? history : null}
     </div>

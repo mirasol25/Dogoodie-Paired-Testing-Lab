@@ -7,6 +7,7 @@ import { saveProtocolRequirementsAction } from "@/app/paired-testing-demo/protoc
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Json } from "@/types/database.types";
 
 type EvidenceCode = "screen_recording" | "gps_coordinates";
@@ -54,6 +55,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
   const [savedObservations, setSavedObservations] = useState(existingObservations);
   const [configured, setConfigured] = useState(initiallyConfigured);
   const [pending, startTransition] = useTransition();
+  const navigation = useProtocolDraftNavigation();
   const dirty = !configured || [...evidence].sort().join(",") !== [...savedEvidence].sort().join(",") || [...observations].sort().join(",") !== [...savedObservations].sort().join(",");
 
   function toggleEvidence(code: EvidenceCode, checked: boolean) {
@@ -72,6 +74,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
         setSavedObservations(observations);
         setConfigured(true);
         toast.success(result.message);
+        navigation?.goToStep("exclusions");
       } else toast.error(result.message);
     });
   }
@@ -90,7 +93,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
         return <label key={option.code} className={`flex min-h-14 items-center gap-3 rounded-md border p-3 ${forced ? "cursor-not-allowed border-primary/40 bg-primary/5" : checked ? "cursor-pointer border-primary bg-primary/5" : "cursor-pointer border-border hover:bg-secondary"}`}><Checkbox checked={checked} disabled={forced} onCheckedChange={(value) => toggleObservation(option.code, value === true)} /><span className="flex-1 text-sm">{option.label}</span><Badge variant={forced ? "outline" : "secondary"}>{forced ? "Required by control" : "Optional"}</Badge></label>;
       })}</div></div>
 
-      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save requirements"}</Button></div>
+      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>
   );
 }

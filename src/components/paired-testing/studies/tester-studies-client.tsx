@@ -1,0 +1,122 @@
+"use client";
+
+import { ArrowRight, Check, LoaderCircle, Search } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { selectStudyAction } from "@/app/paired-testing-demo/studies/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
+import type { Study } from "@/lib/data/studies";
+
+interface TesterStudyRow {
+  study: Study;
+  workload: { assigned: number; needsAction: number; submitted: number };
+}
+
+const rowGrid = "lg:grid-cols-[minmax(230px,1.25fr)_minmax(180px,.7fr)_minmax(220px,.9fr)_minmax(230px,.85fr)_132px]";
+
+function formatDate(value: string | null, timezone: string) {
+  return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: timezone }).format(new Date(value)) : "Not set";
+}
+
+export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudyRow[]; activeStudyId: string | null }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [pendingId, setPendingId] = useState<string>();
+  const [pending, startTransition] = useTransition();
+  const visible = useMemo(
+    () => rows.filter(({ study }) => `${study.study_code} ${study.name}`.toLowerCase().includes(query.trim().toLowerCase())),
+    [query, rows],
+  );
+
+  function open(study: Study) {
+    if (study.id === activeStudyId) {
+      router.push("/paired-testing-demo");
+      return;
+    }
+    setPendingId(study.id);
+    startTransition(async () => {
+      const result = await selectStudyAction(study.id);
+      if (!result.ok) {
+        toast.error(result.message);
+        setPendingId(undefined);
+        return;
+      }
+      toast.success(result.message);
+      router.push("/paired-testing-demo");
+      router.refresh();
+    });
+  }
+
+  return (
+    <section className="overflow-hidden rounded-md border border-border">
+      <div className="border-b border-border bg-card/35 p-3">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search study name or code" className="pl-9" />
+        </div>
+      </div>
+      <div className={`hidden border-b border-border bg-secondary/25 px-5 py-3 lg:grid ${rowGrid}`}>
+        <ColumnHeader>Study</ColumnHeader>
+        <ColumnHeader>Status</ColumnHeader>
+        <ColumnHeader>Testing period</ColumnHeader>
+        <ColumnHeader>Assigned sessions</ColumnHeader>
+        <span className="sr-only">Action</span>
+      </div>
+      <div className="divide-y divide-border">
+        {visible.map(({ study, workload }) => {
+          const selected = study.id === activeStudyId;
+          return (
+            <article key={study.id} className={selected ? "bg-primary/[0.04]" : undefined}>
+              <div className={`grid gap-5 px-4 py-5 sm:px-5 lg:items-center lg:gap-4 ${rowGrid}`}>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate text-sm font-semibold">{study.name}</h2>
+                    {selected ? <span className="flex items-center gap-1 text-[10px] text-primary"><Check className="size-3" />Selected</span> : null}
+                  </div>
+                  <p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>
+                </div>
+                <div>
+                  <p className="mb-2 text-[10px] uppercase text-muted-foreground lg:hidden">Status</p>
+                  <StatusBadge status={study.status} />
+                  <p className="mt-2 text-xs text-muted-foreground">{study.display_timezone} | {study.default_currency ?? "Currency pending"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-muted-foreground lg:hidden">Testing period</p>
+                  <p className="mt-1 text-xs font-medium lg:mt-0">{formatDate(study.testing_starts_at, study.display_timezone)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">to {formatDate(study.testing_ends_at, study.display_timezone)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-muted-foreground lg:hidden">Assigned sessions</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 border-y border-border py-3 text-center lg:mt-0 lg:border-y-0 lg:py-0">
+                    <Count label="Assigned" value={workload.assigned} />
+                    <Count label="Need action" value={workload.needsAction} highlight={workload.needsAction > 0} />
+                    <Count label="Submitted" value={workload.submitted} />
+                  </div>
+                </div>
+                <div className="flex lg:justify-end">
+                  <Button onClick={() => open(study)} disabled={pending} variant={selected ? "default" : "outline"} className="w-full lg:w-auto">
+                    {pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : selected ? "Open overview" : "Select study"}
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+        {!visible.length ? <div className="px-6 py-14 text-center"><p className="text-sm font-medium">No assigned studies match</p><p className="mt-1 text-xs text-muted-foreground">Adjust the study search.</p></div> : null}
+      </div>
+      <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">{visible.length} of {rows.length} assigned studies</div>
+    </section>
+  );
+}
+
+function ColumnHeader({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-medium uppercase text-muted-foreground">{children}</p>;
+}
+
+function Count({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  return <div><p className={`text-lg font-semibold ${highlight ? "text-primary" : ""}`}>{value}</p><p className="mt-1 text-[9px] uppercase text-muted-foreground">{label}</p></div>;
+}

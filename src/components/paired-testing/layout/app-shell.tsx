@@ -149,14 +149,14 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
     <div className="min-h-screen">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border/80 bg-[#08120e]/95 p-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand />
-        {user.role !== "tester" ? <Link href={user.role === "expert_reviewer" ? "/paired-testing-demo/review-studies" : user.role === "law_firm_viewer" ? "/paired-testing-demo/view-studies" : "/paired-testing-demo/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
+        <Link href={user.role === "tester" ? "/paired-testing-demo/tester-studies" : user.role === "expert_reviewer" ? "/paired-testing-demo/review-studies" : user.role === "law_firm_viewer" ? "/paired-testing-demo/view-studies" : "/paired-testing-demo/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
           <div className="flex items-center justify-between gap-2">
             <span className="mono truncate text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span>
             <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
           </div>
-          <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">{activeStudy?.name ?? "Select or create a study"}</p>
-          <p className="mt-1 text-[10px] capitalize leading-4 text-muted-foreground">{activeStudy ? `${activeStudy.status} · ${activeStudy.currency ?? "Currency pending"}` : "Study management"}</p>
-        </Link> : null}
+          <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">{activeStudy?.name ?? (user.role === "law_firm_viewer" ? "No finalized study available" : "Select or create a study")}</p>
+          <p className="mt-1 text-[10px] capitalize leading-4 text-muted-foreground">{activeStudy ? `${activeStudy.status} · ${activeStudy.currency ?? "Currency pending"}` : user.role === "law_firm_viewer" ? "Completed or archived studies only" : "Study management"}</p>
+        </Link>
         <div className={cn("flex-1 overflow-y-auto", user.role === "tester" ? "mt-8" : "mt-5")}><Navigation role={user.role} /></div>
         <div className="space-y-3 border-t border-border/70 pt-4">
           <AccountPanel user={user} />
@@ -176,8 +176,9 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
               <SheetContent side="left" className="w-[290px] p-4">
                 <SheetHeader className="px-0 pt-0"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
                 <Brand />
+                {user.role === "tester" ? <Link href="/paired-testing-demo/tester-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
                 {user.role === "expert_reviewer" ? <Link href="/paired-testing-demo/review-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
-                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
+                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "No finalized study available"}</span></Link> : null}
                 <div className="mt-6"><Navigation role={user.role} /></div>
                 <div className="mt-6 border-t border-border pt-5"><AccountPanel user={user} /></div>
               </SheetContent>

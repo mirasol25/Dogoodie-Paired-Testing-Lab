@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LoaderCircle, Search, UserCheck, UserMinus, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { addStudyMemberAction, setStudyMembershipStatusAction } from "@/app/paired-testing-demo/studies/[studyId]/members/actions";
@@ -17,6 +18,7 @@ import type { AppRole } from "@/lib/data/profiles";
 const roleLabels: Record<AppRole, string> = { admin: "Administrator", test_coordinator: "Coordinator", tester: "Tester", expert_reviewer: "Expert Reviewer", law_firm_viewer: "Law-Firm Viewer" };
 
 export function StudyMembersManager({ studyId, members, eligibleAccounts, canManageCoordinators }: { studyId: string; members: StudyMember[]; eligibleAccounts: EligibleStudyAccount[]; canManageCoordinators: boolean }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("active");
@@ -37,7 +39,15 @@ export function StudyMembersManager({ studyId, members, eligibleAccounts, canMan
     if (!selectedAccountIds.length) return;
     startTransition(async () => {
       const result = await addStudyMemberAction({ studyId, userIds: selectedAccountIds });
-      if (result.ok) { setAddOpen(false); setSelectedAccountIds([]); toast.success(result.message); }
+      if (result.ok) {
+        setAddOpen(false);
+        setSelectedAccountIds([]);
+        toast.success(result.message);
+        if (!result.hasActiveProtocol) {
+          router.push("/paired-testing-demo/protocol");
+          router.refresh();
+        }
+      }
       else toast.error(result.message);
     });
   }

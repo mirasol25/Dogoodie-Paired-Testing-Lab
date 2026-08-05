@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Json } from "@/types/database.types";
 
 interface ThresholdValues {
@@ -58,6 +59,7 @@ export function ValidationThresholdsForm({ studyId, protocolId, configuration }:
   const [configured, setConfigured] = useState(initial.configured);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const navigation = useProtocolDraftNavigation();
   const dirty = !configured || JSON.stringify(values) !== JSON.stringify(saved);
 
   function update(key: keyof ThresholdValues, rawValue: string) {
@@ -87,6 +89,7 @@ export function ValidationThresholdsForm({ studyId, protocolId, configuration }:
         setSaved(values);
         setConfigured(true);
         toast.success(result.message);
+        navigation?.goToStep("requirements");
       } else {
         setError(result.message);
         toast.error(result.message);
@@ -104,7 +107,7 @@ export function ValidationThresholdsForm({ studyId, protocolId, configuration }:
       </div>
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save validation thresholds"}</Button></div>
+      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>
   );
 }

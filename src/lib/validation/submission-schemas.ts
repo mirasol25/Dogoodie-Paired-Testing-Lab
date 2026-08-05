@@ -12,7 +12,8 @@ export const submissionDraftSchema = z.object({
   operatingSystemVersion: z.string().trim().min(1, "Enter the OS version.").max(80),
   appVersion: z.string().trim().min(1, "Enter the app version.").max(80),
   batteryPercentage: z.number().int().min(0).max(100),
-  notes: z.string().trim().max(1000).optional().transform((value) => value || null),
+  // The client normalizes a blank optional note to null before the server action validates it again.
+  notes: z.string().trim().max(1000).nullable().optional().transform((value) => value || null),
 });
 
 export type SubmissionDraftInput = z.input<typeof submissionDraftSchema>;

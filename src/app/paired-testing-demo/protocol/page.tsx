@@ -5,8 +5,8 @@ import { getActiveStudy } from "@/lib/data/active-study";
 import { listStudyProtocols } from "@/lib/data/protocols";
 import { canManageProtocols } from "@/lib/auth/protocol-permissions";
 
-export default async function ProtocolPage({ searchParams }: { searchParams: Promise<{ version?: string }> }) {
-  const { version } = await searchParams;
+export default async function ProtocolPage({ searchParams }: { searchParams: Promise<{ version?: string; step?: string }> }) {
+  const { version, step } = await searchParams;
   const identity = await requireActiveUser("/paired-testing-demo/protocol");
   const study = await getActiveStudy();
 
@@ -16,6 +16,6 @@ export default async function ProtocolPage({ searchParams }: { searchParams: Pro
 
   const protocols = await listStudyProtocols(study.id);
   const canManage = canManageProtocols(identity.profile.role);
-  return <ProtocolManager study={study} protocols={protocols} canManage={canManage} accessRole={identity.profile.role} selectedVersion={version} />;
+  return <ProtocolManager study={study} protocols={protocols} canManage={canManage} accessRole={identity.profile.role} selectedVersion={version} initialConfigureStep={step === "conditions" ? "conditions" : "details"} />;
 }
 

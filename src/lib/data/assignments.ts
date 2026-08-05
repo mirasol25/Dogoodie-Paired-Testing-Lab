@@ -219,6 +219,13 @@ export async function getStudyAssignment(studyId: string, assignmentId: string):
   return assignments.find((assignment) => assignment.id === assignmentId) ?? null;
 }
 
+export async function getAccessibleAssignmentStudyId(assignmentId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("assignments").select("study_id").eq("id", assignmentId).maybeSingle();
+  if (error) throw new AssignmentDataError("The assignment could not be loaded.");
+  return data?.study_id ?? null;
+}
+
 export async function getOwnAssignmentSubmission(assignmentId: string, userId: string): Promise<SubmissionRow | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("submissions").select("*").eq("assignment_id", assignmentId).eq("user_id", userId).maybeSingle();

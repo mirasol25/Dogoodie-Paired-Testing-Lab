@@ -7,6 +7,7 @@ import { saveProtocolExclusionsAction } from "@/app/paired-testing-demo/protocol
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Json } from "@/types/database.types";
 
 type OptionalExclusion = "outside_assignment_window" | "declared_protocol_deviation" | "evidence_timestamp_mismatch" | "duplicate_evidence";
@@ -33,13 +34,14 @@ function observationFields(configuration: Json): Json {
   return configuration && typeof configuration === "object" && !Array.isArray(configuration) ? configuration.observation_fields ?? null : null;
 }
 
-export function ExclusionConditionsForm({ studyId, protocolId, fixedControls, evidenceRequirements, validationConfiguration, exclusionConditions }: { studyId: string; protocolId: string; fixedControls: Json; evidenceRequirements: Json; validationConfiguration: Json; exclusionConditions: Json }) {
+export function ExclusionConditionsForm({ studyId, protocolId, fixedControls, evidenceRequirements, validationConfiguration, exclusionConditions, hasComparison = false }: { studyId: string; protocolId: string; fixedControls: Json; evidenceRequirements: Json; validationConfiguration: Json; exclusionConditions: Json; hasComparison?: boolean }) {
   const existingCodes = new Set(entries(exclusionConditions).map((entry) => entry.code));
   const initialOptional = optionalRules.filter((rule) => existingCodes.has(rule.code)).map((rule) => rule.code);
   const [selected, setSelected] = useState<OptionalExclusion[]>(initialOptional);
   const [saved, setSaved] = useState<OptionalExclusion[]>(initialOptional);
   const [configured, setConfigured] = useState(entries(exclusionConditions).length > 0);
   const [pending, startTransition] = useTransition();
+  const navigation = useProtocolDraftNavigation();
   const dirty = !configured || [...selected].sort().join(",") !== [...saved].sort().join(",");
   const automaticRules = [
     ...entries(fixedControls).map((entry) => `${entry.label} does not match`),
@@ -60,6 +62,7 @@ export function ExclusionConditionsForm({ studyId, protocolId, fixedControls, ev
         setSaved(selected);
         setConfigured(true);
         toast.success(result.message);
+        navigation?.goToWorkspace(hasComparison ? "changes" : "review");
       } else toast.error(result.message);
     });
   }
@@ -72,7 +75,7 @@ export function ExclusionConditionsForm({ studyId, protocolId, fixedControls, ev
 
       <div className="space-y-3"><h3 className="text-sm font-semibold">Additional operational exclusions</h3><div className="grid gap-2 md:grid-cols-2">{optionalRules.map((rule) => <label key={rule.code} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-md border p-3 ${selected.includes(rule.code) ? "border-destructive/50 bg-destructive/5" : "border-border hover:bg-secondary"}`}><Checkbox checked={selected.includes(rule.code)} onCheckedChange={(checked) => toggle(rule.code, checked === true)} /><span className="flex-1 text-sm">{rule.label}</span><Badge variant="outline">Fail</Badge></label>)}</div></div>
 
-      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save exclusion conditions"}</Button></div>
+      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : hasComparison ? "Save and view changes" : "Save and review"}</Button></div>
     </section>
   );
 }

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Protocol } from "@/lib/data/protocols";
 
 export function EditProtocolDetails({ protocol }: { protocol: Protocol }) {
@@ -17,6 +18,7 @@ export function EditProtocolDetails({ protocol }: { protocol: Protocol }) {
   const [saved, setSaved] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const navigation = useProtocolDraftNavigation();
   const dirty = JSON.stringify(values) !== JSON.stringify(saved);
 
   function update(key: keyof typeof values, value: string) {
@@ -34,6 +36,7 @@ export function EditProtocolDetails({ protocol }: { protocol: Protocol }) {
       if (result.ok) {
         setSaved(values);
         toast.success(result.message);
+        navigation?.goToStep("conditions");
       } else {
         setError(result.message);
         toast.error(result.message);
@@ -51,7 +54,7 @@ export function EditProtocolDetails({ protocol }: { protocol: Protocol }) {
         <div className="space-y-2"><Label htmlFor="edit-tester-b">Tester B value</Label><Input id="edit-tester-b" value={values.testerB} onChange={(event) => update("testerB", event.target.value)} placeholder="Subscription account" maxLength={120} /></div>
       </div>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save protocol details"}</Button></div>
+      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>
   );
 }

@@ -7,6 +7,7 @@ import { saveMatchingControlsAction } from "@/app/paired-testing-demo/protocol/a
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Json } from "@/types/database.types";
 
 type OptionalControlCode = "operating_system_family" | "app_version" | "device_model" | "network_category";
@@ -46,6 +47,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls }: { s
   const [saved, setSaved] = useState<OptionalControlCode[]>(initialControls);
   const [configured, setConfigured] = useState(hasCanonicalControls(fixedControls));
   const [pending, startTransition] = useTransition();
+  const navigation = useProtocolDraftNavigation();
   const dirty = !configured || [...selected].sort().join(",") !== [...saved].sort().join(",");
 
   function toggle(code: OptionalControlCode, checked: boolean) {
@@ -59,6 +61,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls }: { s
         setSaved(selected);
         setConfigured(true);
         toast.success(result.message);
+        navigation?.goToStep("thresholds");
       } else toast.error(result.message);
     });
   }
@@ -71,7 +74,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls }: { s
 
       <div className="space-y-2"><h3 className="text-sm font-semibold">Optional technical matches</h3><div className="grid gap-2 md:grid-cols-2">{optionalControls.map((control) => <label key={control.code} className={`flex min-h-16 cursor-pointer items-center gap-3 rounded-md border p-3 ${selected.includes(control.code) ? "border-primary bg-primary/5" : "border-border hover:bg-secondary"}`}><Checkbox checked={selected.includes(control.code)} onCheckedChange={(checked) => toggle(control.code, checked === true)} /><span className="min-w-0"><span className="block text-sm font-medium">{control.label}</span><span className="block text-xs text-muted-foreground">{control.detail}</span></span></label>)}</div></div>
 
-      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save matching controls"}</Button></div>
+      <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>
   );
 }
