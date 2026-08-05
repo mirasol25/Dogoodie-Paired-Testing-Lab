@@ -1,0 +1,20 @@
+
+> dogoodie-paired-testing-lab@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.10 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+- Environments: .env.local
+✓ Ready in 1121ms
+Creating turbopack project {
+  dir: 'C:\\Users\\josep\\Documents\\des-projects\\pairedTestingLab2.0\\dogoodie-paired-testing-lab',
+  testMode: true
+}
+
+ GET /login?next=%2Fpaired-testing-demo 200 in 2.7s (next.js: 810ms, proxy.ts: 358ms, application-code: 1569ms)
+ GET / 307 in 382ms (next.js: 88ms, application-code: 294ms)
+ GET /login 200 in 228ms (next.js: 31ms, proxy.ts: 36ms, application-code: 161ms)
+ GET / 307 in 1171ms (next.js: 64ms, application-code: 1107ms)
+ GET /paired-testing-demo 200 in 6.6s (next.js: 248ms, proxy.ts: 1280ms, application-code: 5.1s)
+[?25h

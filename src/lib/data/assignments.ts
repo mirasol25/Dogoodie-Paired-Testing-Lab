@@ -1,0 +1,295 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/database.types";
+import { createAssignmentSchema, type CreateAssignmentInput } from "@/lib/validation/assignment-schemas";
+import { submissionDraftSchema, type SubmissionDraftInput } from "@/lib/validation/submission-schemas";
+import { registerEvidenceSchema, type RegisterEvidenceInput } from "@/lib/validation/evidence-schemas";
+
+type AssignmentRow = Database["public"]["Tables"]["assignments"]["Row"];
+export type SubmissionRow = Database["public"]["Tables"]["submissions"]["Row"];
+export type EvidenceRow = Database["public"]["Tables"]["evidence_files"]["Row"];
+type TesterSlot = Database["public"]["Enums"]["tester_slot"];
+
+export interface AssignmentTesterSummary {
+  slot: TesterSlot;
+  userId: string;
+  displayName: string;
+  email: string;
+  status: Database["public"]["Enums"]["assignment_tester_status"];
+  serviceName: string | null;
+  platformName: string | null;
+  protocolValue: string | null;
+}
+
+export interface AssignmentSummary extends AssignmentRow {
+  protocolCode: string;
+  protocolVersion: string;
+  testers: AssignmentTesterSummary[];
+  protocolFixedControls: Database["public"]["Tables"]["protocols"]["Row"]["fixed_controls"];
+  protocolEvidenceRequirements: Database["public"]["Tables"]["protocols"]["Row"]["evidence_requirements"];
+}
+
+export interface AssignmentRouteOption {
+  id: string;
+  name: string;
+  pickup: string;
+  destination: string;
+  timezone: string;
+}
+
+export interface AssignmentServiceOption {
+  id: string;
+  platformId: string;
+  platformName: string;
+  serviceName: string;
+  normalizedCategory: string;
+}
+
+export interface AssignmentProtocolOption {
+  id: string;
+  code: string;
+  version: string;
+  title: string;
+  isolatedVariable: string;
+  testerAValue: string;
+  testerBValue: string;
+}
+
+export interface AssignmentTesterOption {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+export interface AssignmentSetupOptions {
+  routes: AssignmentRouteOption[];
+  services: AssignmentServiceOption[];
+  protocols: AssignmentProtocolOption[];
+}
+
+export class AssignmentDataError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AssignmentDataError";
+  }
+}
+
+export async function createAssignment(input: CreateAssignmentInput): Promise<AssignmentRow> {
+  const parsed = createAssignmentSchema.safeParse(input);
+  if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid assignment.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_paired_assignment", {
+    p_study_id: parsed.data.studyId,
+    p_protocol_id: parsed.data.protocolId,
+    p_route_id: parsed.data.routeId,
+    p_tester_a_id: parsed.data.testerAId,
+    p_tester_b_id: parsed.data.testerBId,
+    p_tester_a_service_id: parsed.data.testerAServiceId,
+    p_tester_b_service_id: parsed.data.testerBServiceId,
+    p_testing_date: parsed.data.testingDate,
+    p_start_time: parsed.data.startTime,
+    p_end_time: parsed.data.endTime,
+    p_timezone: parsed.data.timezone,
+    p_instructions: parsed.data.instructions,
+  });
+  if (error) throw new AssignmentDataError(error.message || "The assignment could not be created.");
+  if (!data) throw new AssignmentDataError("The created assignment was not returned.");
+  return data;
+}
+
+export async function listStudyAssignments(
+  studyId: string,
+  suppliedClient?: SupabaseClient<Database>,
+): Promise<AssignmentSummary[]> {
+  const supabase = suppliedClient ?? await createClient();
+  const { data: assignments, error } = await supabase
+    .from("assignments")
+    .select("*,protocols(protocol_code,version,fixed_controls,evidence_requirements)")
+    .eq("study_id", studyId)
+    .order("scheduled_start", { ascending: false, nullsFirst: false });
+
+  if (error) throw new AssignmentDataError("Assignments could not be loaded.");
+  if (!assignments.length) return [];
+
+  const assignmentIds = assignments.map((assignment) => assignment.id);
+  const { data: slots, error: slotsError } = await supabase
+    .from("assignment_testers")
+    .select("assignment_id,user_id,slot,status,platform_service_id,account_configuration")
+    .in("assignment_id", assignmentIds);
+  if (slotsError) throw new AssignmentDataError("Assignment tester slots could not be loaded.");
+
+  const serviceIds = [...new Set(slots.flatMap((slot) => slot.platform_service_id ? [slot.platform_service_id] : []))];
+  const [rosterResult, servicesResult] = await Promise.all([
+    supabase.rpc("list_assignment_pair_roster", { p_study_id: studyId }),
+    serviceIds.length
+      ? supabase.from("platform_services").select("id,name,platform_id").in("id", serviceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (rosterResult.error || servicesResult.error) {
+    throw new AssignmentDataError("Assignment details could not be loaded.");
+  }
+
+  const platformIds = [...new Set(servicesResult.data.map((service) => service.platform_id))];
+  const { data: platformRows, error: platformError } = platformIds.length
+    ? await supabase.from("platforms").select("id,name").in("id", platformIds)
+    : { data: [], error: null };
+  if (platformError) throw new AssignmentDataError("Assignment provider details could not be loaded.");
+  const roster = new Map(rosterResult.data.map((profile) => [`${profile.assignment_id}:${profile.user_id}`, profile]));
+  const platforms = new Map(platformRows.map((platform) => [platform.id, platform.name]));
+  const services = new Map(servicesResult.data.map((service) => [service.id, service]));
+  return assignments.map((assignment) => ({
+    ...assignment,
+    protocolCode: assignment.protocols.protocol_code,
+    protocolVersion: assignment.protocols.version,
+    protocolFixedControls: assignment.protocols.fixed_controls,
+    protocolEvidenceRequirements: assignment.protocols.evidence_requirements,
+    testers: rosterResult.data
+      .filter((entry) => entry.assignment_id === assignment.id)
+      .map((entry) => {
+        const slot = slots.find((candidate) => candidate.assignment_id === entry.assignment_id && candidate.user_id === entry.user_id);
+        const profile = roster.get(`${entry.assignment_id}:${entry.user_id}`);
+        return {
+          slot: entry.slot,
+          userId: entry.user_id,
+          displayName: profile?.display_name?.trim() || profile?.email || "Unavailable tester",
+          email: profile?.email ?? "",
+          status: entry.slot_status,
+          serviceName: slot?.platform_service_id ? services.get(slot.platform_service_id)?.name ?? null : null,
+          platformName: slot?.platform_service_id ? platforms.get(services.get(slot.platform_service_id)?.platform_id ?? "") ?? null : null,
+          protocolValue: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.protocol_value === "string" ? slot.account_configuration.protocol_value : null,
+        };
+      }),
+  }));
+}
+
+export async function getStudyAssignment(studyId: string, assignmentId: string): Promise<AssignmentSummary | null> {
+  const assignments = await listStudyAssignments(studyId);
+  return assignments.find((assignment) => assignment.id === assignmentId) ?? null;
+}
+
+export async function getOwnAssignmentSubmission(assignmentId: string, userId: string): Promise<SubmissionRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("submissions").select("*").eq("assignment_id", assignmentId).eq("user_id", userId).maybeSingle();
+  if (error) throw new AssignmentDataError("The submission draft could not be loaded.");
+  return data;
+}
+
+export async function confirmAssignmentReady(assignmentId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("confirm_assignment_ready", { p_assignment_id: assignmentId });
+  if (error) throw new AssignmentDataError(error.message || "Readiness could not be confirmed.");
+}
+
+export async function startAssignmentTest(assignmentId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("start_assignment_test", { p_assignment_id: assignmentId });
+  if (error) throw new AssignmentDataError(error.message || "The test could not be started.");
+}
+
+export async function saveSubmissionDraft(input: SubmissionDraftInput): Promise<SubmissionRow> {
+  const parsed = submissionDraftSchema.safeParse(input);
+  if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid submission draft.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("save_submission_draft", {
+    p_assignment_id: parsed.data.assignmentId,
+    p_displayed_fare: parsed.data.displayedFare,
+    p_quote_timestamp: parsed.data.quoteTimestamp,
+    p_latitude: parsed.data.latitude,
+    p_longitude: parsed.data.longitude,
+    p_network_type: parsed.data.networkType,
+    p_device_type: parsed.data.deviceType,
+    p_operating_system: parsed.data.operatingSystem,
+    p_operating_system_version: parsed.data.operatingSystemVersion,
+    p_app_version: parsed.data.appVersion,
+    p_battery_percentage: parsed.data.batteryPercentage,
+    p_notes: parsed.data.notes,
+  });
+  if (error) throw new AssignmentDataError(error.message || "The submission draft could not be saved.");
+  if (!data) throw new AssignmentDataError("The saved submission was not returned.");
+  return data;
+}
+
+export async function getOwnSubmissionEvidence(submissionId: string | null, userId: string): Promise<EvidenceRow[]> {
+  if (!submissionId) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("evidence_files").select("*").eq("submission_id", submissionId).eq("uploaded_by", userId).order("created_at");
+  if (error) throw new AssignmentDataError("Submission evidence could not be loaded.");
+  return data;
+}
+
+export async function registerSubmissionEvidence(input: RegisterEvidenceInput): Promise<EvidenceRow> {
+  const parsed = registerEvidenceSchema.safeParse(input);
+  if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid evidence metadata.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("register_submission_evidence", {
+    p_submission_id: parsed.data.submissionId, p_evidence_type: parsed.data.evidenceType,
+    p_storage_path: parsed.data.storagePath, p_original_filename: parsed.data.originalFilename,
+    p_mime_type: parsed.data.mimeType, p_size_bytes: parsed.data.sizeBytes, p_sha256: parsed.data.sha256,
+    p_captured_at: parsed.data.capturedAt,
+  });
+  if (error) throw new AssignmentDataError(error.message || "Evidence could not be registered.");
+  if (!data) throw new AssignmentDataError("The registered evidence was not returned.");
+  return data;
+}
+
+export async function submitTesterObservation(assignmentId: string): Promise<SubmissionRow> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("submit_tester_observation", { p_assignment_id: assignmentId });
+  if (error) throw new AssignmentDataError(error.message || "The observation could not be submitted.");
+  if (!data) throw new AssignmentDataError("The submitted observation was not returned.");
+  return data;
+}
+
+export async function getAssignmentSetupOptions(
+  studyId: string,
+  studyConfiguration: Database["public"]["Tables"]["studies"]["Row"]["configuration"],
+  suppliedClient?: SupabaseClient<Database>,
+): Promise<AssignmentSetupOptions> {
+  const supabase = suppliedClient ?? await createClient();
+  const configuration = studyConfiguration && typeof studyConfiguration === "object" && !Array.isArray(studyConfiguration)
+    ? studyConfiguration as Record<string, unknown>
+    : {};
+  const serviceIds = Array.isArray(configuration.platform_service_ids)
+    ? configuration.platform_service_ids.filter((id): id is string => typeof id === "string")
+    : [];
+
+  const [routesResult, protocolsResult, servicesResult] = await Promise.all([
+    supabase.from("study_routes").select("id,route_name,pickup_location_id,destination_location_id").eq("study_id", studyId).eq("is_active", true).order("created_at"),
+    supabase.from("protocols").select("id,protocol_code,version,title,isolated_variable,tester_a_value,tester_b_value").eq("study_id", studyId).eq("status", "active").order("effective_at", { ascending: false }),
+    serviceIds.length
+      ? supabase.from("platform_services").select("id,platform_id,name,normalized_service_category").in("id", serviceIds).eq("is_active", true)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (routesResult.error || protocolsResult.error || servicesResult.error) {
+    throw new AssignmentDataError("Assignment setup options could not be loaded.");
+  }
+
+  const locationIds = [...new Set(routesResult.data.flatMap((route) => [route.pickup_location_id, route.destination_location_id]))];
+  const platformIds = [...new Set(servicesResult.data.map((service) => service.platform_id))];
+  const [locationsResult, platformsResult] = await Promise.all([
+    locationIds.length
+      ? supabase.from("study_locations").select("id,label,formatted_address,timezone").in("id", locationIds)
+      : Promise.resolve({ data: [], error: null }),
+    platformIds.length
+      ? supabase.from("platforms").select("id,name").in("id", platformIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (locationsResult.error || platformsResult.error) throw new AssignmentDataError("Route and provider details could not be loaded.");
+  const locations = new Map(locationsResult.data.map((location) => [location.id, location]));
+  const platforms = new Map(platformsResult.data.map((platform) => [platform.id, platform.name]));
+
+  return {
+    routes: routesResult.data.map((route) => ({
+      id: route.id,
+      name: route.route_name,
+      pickup: locations.get(route.pickup_location_id)?.label || locations.get(route.pickup_location_id)?.formatted_address || "Pickup unavailable",
+      destination: locations.get(route.destination_location_id)?.label || locations.get(route.destination_location_id)?.formatted_address || "Destination unavailable",
+      timezone: locations.get(route.pickup_location_id)?.timezone || "UTC",
+    })),
+    protocols: protocolsResult.data.map((protocol) => ({ id: protocol.id, code: protocol.protocol_code, version: protocol.version, title: protocol.title, isolatedVariable: protocol.isolated_variable ?? "Protocol condition", testerAValue: protocol.tester_a_value ?? "Not configured", testerBValue: protocol.tester_b_value ?? "Not configured" })),
+    services: serviceIds.flatMap((id) => {
+      const service = servicesResult.data.find((item) => item.id === id);
+      return service ? [{ id: service.id, platformId: service.platform_id, platformName: platforms.get(service.platform_id) ?? "Unknown provider", serviceName: service.name, normalizedCategory: service.normalized_service_category }] : [];
+    }),
+  };
+}

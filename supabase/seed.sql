@@ -1,0 +1,6 @@
+-- Phase 0 intentionally does not seed users, passwords, studies, or the existing
+-- synthetic prototype fixtures. Create internal Auth users through Supabase
+-- Dashboard and bootstrap the first admin using docs/SUPABASE_SETUP.md.
+--
+-- Future development-only reference data may be added here after the builders
+-- agree on approved platform and study configuration. Never add production data.

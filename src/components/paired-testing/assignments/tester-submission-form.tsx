@@ -1,0 +1,94 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { LocateFixed, LoaderCircle, Save } from "lucide-react";
+import { toast } from "sonner";
+import { saveSubmissionDraftAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import type { AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow } from "@/lib/data/assignments";
+import type { Study } from "@/lib/data/studies";
+import { submissionDraftSchema } from "@/lib/validation/submission-schemas";
+import { EvidenceUploader } from "@/components/paired-testing/assignments/evidence-uploader";
+
+interface Values { displayedFare: string; quoteTimestamp: string; latitude: string; longitude: string; networkType: string; deviceType: string; operatingSystem: string; operatingSystemVersion: string; appVersion: string; batteryPercentage: string; notes: string }
+
+export function TesterSubmissionForm({ study, assignment, ownSlot, submission, evidence, timezone }: { study: Study; assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary; submission: SubmissionRow | null; evidence: EvidenceRow[]; timezone: string }) {
+  const [pending, startTransition] = useTransition();
+  const [locating, setLocating] = useState(false);
+  const [saved, setSaved] = useState(Boolean(submission));
+  const [submissionId, setSubmissionId] = useState<string | null>(submission?.id ?? null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Values>({
+    displayedFare: submission?.displayed_fare?.toString() ?? "",
+    quoteTimestamp: submission?.quote_timestamp ? formatInTimeZone(submission.quote_timestamp, timezone, "yyyy-MM-dd'T'HH:mm:ss") : "",
+    latitude: submission?.latitude?.toString() ?? "",
+    longitude: submission?.longitude?.toString() ?? "",
+    networkType: submission?.network_type ?? "",
+    deviceType: submission?.device_type ?? "",
+    operatingSystem: submission?.operating_system ?? "",
+    operatingSystemVersion: submission?.operating_system_version ?? "",
+    appVersion: submission?.app_version ?? "",
+    batteryPercentage: submission?.battery_percentage?.toString() ?? "",
+    notes: submission?.notes ?? "",
+  });
+  const update = (field: keyof Values, value: string) => { setValues((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: "" })); setSaved(false); };
+
+  function useCurrentTime() {
+    update("quoteTimestamp", formatInTimeZone(new Date(), timezone, "yyyy-MM-dd'T'HH:mm:ss"));
+  }
+
+  function useLocation() {
+    if (!navigator.geolocation) return toast.error("Location access is not available in this browser.");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      update("latitude", position.coords.latitude.toFixed(6));
+      update("longitude", position.coords.longitude.toFixed(6));
+      setLocating(false);
+    }, () => { setLocating(false); toast.error("The current location could not be read."); }, { enableHighAccuracy: true, timeout: 10_000 });
+  }
+
+  function save() {
+    const numberValue = (value: string) => value.trim() ? Number(value) : Number.NaN;
+    const input = {
+      assignmentId: assignment.id,
+      displayedFare: numberValue(values.displayedFare),
+      quoteTimestamp: values.quoteTimestamp ? fromZonedTime(values.quoteTimestamp, timezone).toISOString() : "",
+      latitude: numberValue(values.latitude), longitude: numberValue(values.longitude), networkType: values.networkType,
+      deviceType: values.deviceType, operatingSystem: values.operatingSystem, operatingSystemVersion: values.operatingSystemVersion,
+      appVersion: values.appVersion, batteryPercentage: numberValue(values.batteryPercentage), notes: values.notes,
+    };
+    const parsed = submissionDraftSchema.safeParse(input);
+    if (!parsed.success) {
+      const next: Record<string, string> = {};
+      parsed.error.issues.forEach((issue) => { next[String(issue.path[0])] ??= issue.message; });
+      setErrors(next);
+      return;
+    }
+    startTransition(async () => {
+      const result = await saveSubmissionDraftAction(parsed.data);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      setSaved(true);
+      setSubmissionId(result.submissionId ?? submissionId);
+      toast.success(result.message);
+    });
+  }
+
+  return <section className="space-y-5 border-t border-border pt-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] uppercase text-muted-foreground">Tester submission</p><h2 className="mt-1.5 text-base font-semibold">Capture quote observation</h2><p className="mt-1 text-xs text-muted-foreground">{ownSlot.platformName} - {ownSlot.serviceName} / {assignment.pickup_location} to {assignment.destination_location}</p></div>{saved ? <span className="text-xs font-medium text-primary">Draft saved</span> : null}</div>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Field label={`Displayed fare (${study.default_currency ?? "Currency"})`} value={values.displayedFare} onChange={(value) => update("displayedFare", value)} type="number" step="0.01" error={errors.displayedFare} /><Field label={`Quote timestamp (${timezone})`} value={values.quoteTimestamp} onChange={(value) => update("quoteTimestamp", value)} type="datetime-local" step="1" error={errors.quoteTimestamp} action={<Button type="button" size="sm" variant="ghost" onClick={useCurrentTime}>Now</Button>} /><Field label="Battery percentage" value={values.batteryPercentage} onChange={(value) => update("batteryPercentage", value)} type="number" min="0" max="100" error={errors.batteryPercentage} /><Field label="Latitude" value={values.latitude} onChange={(value) => update("latitude", value)} type="number" step="0.000001" error={errors.latitude} /><Field label="Longitude" value={values.longitude} onChange={(value) => update("longitude", value)} type="number" step="0.000001" error={errors.longitude} /><div className="flex items-end"><Button type="button" className="w-full" variant="outline" onClick={useLocation} disabled={locating}><LocateFixed className="size-4" />{locating ? "Locating..." : "Use current location"}</Button></div><Field label="Network type" value={values.networkType} onChange={(value) => update("networkType", value)} error={errors.networkType} /><Field label="Device type" value={values.deviceType} onChange={(value) => update("deviceType", value)} error={errors.deviceType} /><Field label="Operating system" value={values.operatingSystem} onChange={(value) => update("operatingSystem", value)} error={errors.operatingSystem} /><Field label="OS version" value={values.operatingSystemVersion} onChange={(value) => update("operatingSystemVersion", value)} error={errors.operatingSystemVersion} /><Field label="App version" value={values.appVersion} onChange={(value) => update("appVersion", value)} error={errors.appVersion} /></div>
+    <div className="space-y-2"><Label htmlFor="submission-notes">Notes <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="submission-notes" rows={3} maxLength={1000} value={values.notes} onChange={(event) => update("notes", event.target.value)} /></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Evidence is required before final submission.</p><Button onClick={save} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save observation draft"}</Button></div>
+    <EvidenceUploader assignment={assignment} ownSlot={ownSlot} submissionId={submissionId} observationSaved={saved} initialEvidence={evidence} />
+  </section>;
+}
+
+function Field({ label, value, onChange, error, action, ...props }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & { label: string; value: string; onChange: (value: string) => void; error?: string; action?: React.ReactNode }) {
+  const id = `submission-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`;
+  return <div className="min-w-0 space-y-2"><div className="flex min-h-8 items-center justify-between gap-2"><Label htmlFor={id}>{label}</Label>{action}</div><Input id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-invalid={Boolean(error)} {...props} />{error ? <p className="text-xs text-red-300">{error}</p> : null}</div>;
+}
