@@ -66,7 +66,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </Card>
 
         <p className="mt-5 text-center text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          Preparation prototype · Synthetic study data
+          Internal pilot · Authorized accounts only
         </p>
       </div>
     </main>

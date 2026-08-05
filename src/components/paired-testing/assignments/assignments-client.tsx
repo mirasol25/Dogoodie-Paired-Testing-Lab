@@ -51,7 +51,9 @@ export function AssignmentsClient({ study, assignments, setupOptions, testerOpti
   const complete = assignments.filter((item) => item.status === "completed").length;
 
   return <div className="space-y-6">
-    <PageHeader eyebrow={`${study.study_code} - Collection operations`} title="Paired Assignments" description="Schedule two authorized testers under one active protocol and controlled testing window." actions={canManage ? <AssignmentSetupDialog study={study} options={setupOptions} testers={testerOptions} /> : <Badge variant="outline">Read only</Badge>} />
+    <PageHeader eyebrow={`${study.study_code} - Collection operations`} title="Paired Assignments" description="Schedule two authorized testers under one active protocol and controlled testing window." actions={canManage && study.status === "active" ? <AssignmentSetupDialog study={study} options={setupOptions} testers={testerOptions} /> : <Badge variant="outline" className="capitalize">{study.status === "active" ? "Read only" : `Study ${study.status}`}</Badge>} />
+
+    {study.status !== "active" ? <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-muted-foreground">Collection is closed while this study is {study.status}. Existing records remain available for authorized review.</div> : null}
 
     <div className="grid gap-3 sm:grid-cols-3">
       {[["Total assignments", assignments.length], ["Active workflow", active], ["Completed", complete]].map(([label, value]) => <div key={label} className="data-panel rounded-md p-4"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p><p className="numeric mt-2 text-2xl font-semibold">{value}</p></div>)}

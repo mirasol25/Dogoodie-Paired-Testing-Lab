@@ -6,7 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 export const metadata: Metadata = {
   title: { default: "DoGoodie Paired Testing Lab", template: "%s · DoGoodie Paired Testing Lab" },
-  description: "Synthetic legal-tech paired pricing study preparation prototype.",
+  description: "Internal workspace for protocol-led paired pricing studies.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

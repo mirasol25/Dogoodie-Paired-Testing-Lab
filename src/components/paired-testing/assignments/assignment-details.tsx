@@ -1,10 +1,18 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowLeft, CalendarClock, MapPin } from "lucide-react";
+import { useState, useTransition } from "react";
+import { ArrowLeft, CalendarClock, MapPin, RotateCcw, XCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
-import type { AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow } from "@/lib/data/assignments";
+import type { AssignmentOperationalSummary, AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow } from "@/lib/data/assignments";
+import { cancelAssignmentAction, reopenSubmissionAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import type { Study } from "@/lib/data/studies";
 import { TesterReadiness } from "@/components/paired-testing/assignments/tester-readiness";
 import { TesterStart } from "@/components/paired-testing/assignments/tester-start";
@@ -27,7 +35,7 @@ function formatSchedule(value: string | null, timezone: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
 }
 
-export function AssignmentDetails({ study, assignment, submission, evidence, currentUserId }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; evidence: EvidenceRow[]; currentUserId: string }) {
+export function AssignmentDetails({ study, assignment, submission, evidence, currentUserId, canManage, isAdmin, operations }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; isAdmin: boolean; operations: AssignmentOperationalSummary | null }) {
   const timezone = timezoneOf(assignment, study.display_timezone || "UTC");
   const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
@@ -35,7 +43,7 @@ export function AssignmentDetails({ study, assignment, submission, evidence, cur
   const ownSlot = ownTester?.slot;
   const instructions = instructionsOf(assignment);
   return <div className="space-y-6">
-    <PageHeader eyebrow={`${study.study_code} - Assignment`} title={assignment.assignment_code} description="Controlled paired testing session" actions={<Button asChild variant="outline"><Link href="/paired-testing-demo/assignments"><ArrowLeft className="size-4" />Assignments</Link></Button>} />
+    <PageHeader eyebrow={`${study.study_code} - Assignment`} title={assignment.assignment_code} description="Controlled paired testing session" actions={<div className="flex gap-2">{canManage && !["completed", "cancelled", "expired"].includes(assignment.status) ? <CancelAssignment assignment={assignment} /> : null}<Button asChild variant="outline"><Link href="/paired-testing-demo/assignments"><ArrowLeft className="size-4" />Assignments</Link></Button></div>} />
 
     <div className="flex flex-wrap items-center gap-2 border-y border-border py-3"><StatusBadge status={assignment.status} /><Badge variant="outline">{assignment.protocolCode} v{assignment.protocolVersion}</Badge>{ownSlot ? <Badge variant="secondary">Your side: {ownSlot === "tester_a" ? "Tester A" : "Tester B"}</Badge> : null}</div>
 
@@ -46,6 +54,8 @@ export function AssignmentDetails({ study, assignment, submission, evidence, cur
 
     <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section>
 
+    {canManage && operations ? <OperationalProgress assignment={assignment} operations={operations} isAdmin={isAdmin} /> : null}
+
     {ownTester ? <TesterReadiness assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
     {ownTester ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
     {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} evidence={evidence} timezone={timezone} /> : null}
@@ -53,6 +63,46 @@ export function AssignmentDetails({ study, assignment, submission, evidence, cur
 
     <section className="border-t border-border pt-5"><p className="text-[10px] uppercase text-muted-foreground">Operational instructions</p><p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-foreground">{instructions || "No additional instructions were added."}</p></section>
   </div>;
+}
+
+function CancelAssignment({ assignment }: { assignment: AssignmentSummary }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [pending, startTransition] = useTransition();
+  function submit() {
+    if (reason.trim().length < 10) return toast.error("Enter a cancellation reason of at least 10 characters.");
+    startTransition(async () => {
+      const result = await cancelAssignmentAction(assignment.id, reason);
+      if (result.ok) { toast.success(result.message); setOpen(false); }
+      else toast.error(result.message);
+    });
+  }
+  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button variant="outline"><XCircle className="size-4" />Cancel assignment</Button></DialogTrigger><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Cancel {assignment.assignment_code}?</DialogTitle><DialogDescription>This permanently closes collection for both testers. Submitted records remain preserved.</DialogDescription></DialogHeader><div className="space-y-2"><Label htmlFor="cancellation-reason">Cancellation reason</Label><Textarea id="cancellation-reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} rows={4} placeholder="Explain why this assignment cannot continue." /><p className="text-xs text-muted-foreground">Required and recorded in the Activity Log.</p></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Keep assignment</Button><Button variant="destructive" onClick={submit} disabled={pending}>{pending ? "Cancelling..." : "Cancel assignment"}</Button></DialogFooter></DialogContent></Dialog>;
+}
+
+function OperationalProgress({ assignment, operations, isAdmin }: { assignment: AssignmentSummary; operations: AssignmentOperationalSummary; isAdmin: boolean }) {
+  const progress = (tester?: AssignmentTesterSummary) => {
+    const submission = operations.submissions.find((item) => item.userId === tester?.userId);
+    return { submission: submission?.status ?? "not started", evidence: submission ? `${submission.completeEvidenceCount}/${submission.evidenceCount} integrity-complete` : "No evidence" };
+  };
+  const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
+  const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
+  return <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-primary">Coordinator view</p><h2 className="mt-1.5 text-base font-semibold">Collection and validation progress</h2></div><div className="grid gap-3 md:grid-cols-3">{[["Tester A", testerA, progress(testerA)], ["Tester B", testerB, progress(testerB)]].map(([label, tester, state]) => { const typedTester = tester as AssignmentTesterSummary | undefined; const typedState = state as ReturnType<typeof progress>; const operationalSubmission = operations.submissions.find((item) => item.userId === typedTester?.userId); return <div key={String(label)} className="rounded-md border border-border p-4"><p className="text-[10px] uppercase text-muted-foreground">{String(label)}</p><p className="mt-2 text-sm font-semibold">{typedTester?.displayName ?? "Unassigned"}</p><p className="mt-2 text-xs capitalize">Submission: {typedState.submission.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-muted-foreground">Evidence: {typedState.evidence}</p>{isAdmin && operationalSubmission?.status === "submitted" ? <ReopenSubmission assignmentId={assignment.id} submissionId={operationalSubmission.id} testerName={typedTester?.displayName ?? String(label)} /> : null}</div>; })}<div className="rounded-md border border-border p-4"><p className="text-[10px] uppercase text-muted-foreground">Matched validation</p>{operations.pair ? <><Link href={`/paired-testing-demo/pairs/${operations.pair.id}`} className="mono mt-2 block text-sm font-semibold hover:text-primary">{operations.pair.pairCode}</Link><div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={operations.pair.technicalStatus} /><StatusBadge status={operations.pair.evidenceStatus} /></div></> : <><p className="mt-2 text-sm font-semibold">Pair pending</p><p className="mt-1 text-xs text-muted-foreground">Created automatically after both submissions.</p></>}</div></div></section>;
+}
+
+function ReopenSubmission({ assignmentId, submissionId, testerName }: { assignmentId: string; submissionId: string; testerName: string }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [pending, startTransition] = useTransition();
+  function submit() {
+    if (reason.trim().length < 10) return toast.error("Enter a reopen reason of at least 10 characters.");
+    startTransition(async () => {
+      const result = await reopenSubmissionAction(assignmentId, submissionId, reason);
+      if (result.ok) { toast.success(result.message); setOpen(false); setReason(""); }
+      else toast.error(result.message);
+    });
+  }
+  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button size="sm" variant="outline" className="mt-4"><RotateCcw className="size-3.5" />Reopen submission</Button></DialogTrigger><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Reopen {testerName}&apos;s submission?</DialogTitle><DialogDescription>The current finalized state and any generated comparison are preserved in revision history. The tester must correct and submit the observation again.</DialogDescription></DialogHeader><div className="space-y-2"><Label htmlFor={`reopen-reason-${submissionId}`}>Reason</Label><Textarea id={`reopen-reason-${submissionId}`} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} rows={4} placeholder="Describe the correction that is required." /><p className="text-xs text-muted-foreground">Required and recorded in the Activity Log.</p></div><DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Keep submitted</Button><Button onClick={submit} disabled={pending}>{pending ? "Reopening..." : "Reopen for correction"}</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function Location({ label, value, accent }: { label: string; value: string; accent: "primary" | "amber" }) {

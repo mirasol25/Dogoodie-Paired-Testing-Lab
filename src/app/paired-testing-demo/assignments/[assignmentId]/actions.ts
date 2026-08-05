@@ -2,7 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth/server";
-import { AssignmentDataError, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
+import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, reopenSubmission, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
+import { requireRole } from "@/lib/auth/server";
+
+export async function cancelAssignmentAction(assignmentId: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  await requireRole(["admin", "test_coordinator"], `/paired-testing-demo/assignments/${assignmentId}`);
+  try {
+    const assignment = await cancelAssignment(assignmentId, reason);
+    revalidatePath("/paired-testing-demo/assignments");
+    revalidatePath(`/paired-testing-demo/assignments/${assignmentId}`);
+    revalidatePath("/paired-testing-demo/audit");
+    return { ok: true, message: `${assignment.assignment_code} was cancelled.` };
+  } catch (error) {
+    if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The assignment could not be cancelled." };
+  }
+}
+
+export async function reopenSubmissionAction(assignmentId: string, submissionId: string, reason: string): Promise<{ ok: boolean; message: string }> {
+  await requireRole(["admin"], `/paired-testing-demo/assignments/${assignmentId}`);
+  try {
+    const submission = await reopenSubmission(submissionId, reason);
+    revalidatePath("/paired-testing-demo/assignments");
+    revalidatePath(`/paired-testing-demo/assignments/${assignmentId}`);
+    revalidatePath("/paired-testing-demo/pairs");
+    revalidatePath("/paired-testing-demo/reports");
+    revalidatePath("/paired-testing-demo/audit");
+    return { ok: true, message: `${submission.submission_code ?? "Observation"} was reopened for correction.` };
+  } catch (error) {
+    if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The submission could not be reopened." };
+  }
+}
 
 export async function confirmReadyAction(assignmentId: string): Promise<{ ok: boolean; message: string }> {
   await requireActiveUser(`/paired-testing-demo/assignments/${assignmentId}`);

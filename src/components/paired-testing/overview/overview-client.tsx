@@ -1,97 +1,24 @@
-"use client";
-
 import Link from "next/link";
-import { ArrowRight, ClipboardCheck, FileArchive, FlaskConical, Scale, ShieldCheck } from "lucide-react";
+import { ArrowRight, ClipboardCheck, FileArchive, Scale, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { demoConfig } from "@/config/paired-testing-demo.config";
-import { calculateDashboardMetrics } from "@/lib/calculations/dashboard-metrics";
-import { formatDemoDateTime } from "@/lib/formatting/date-time";
-import { useDemoStore } from "@/store/paired-testing-demo.store";
-import { DisclaimerAlert } from "@/components/paired-testing/shared/disclaimer-alert";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
+import type { ActivityLogEvent } from "@/lib/data/activity-logs";
+import type { ExpertReview, MatchedPairSummary } from "@/lib/data/matched-pairs";
+import type { AppRole } from "@/lib/data/profiles";
+import type { Study } from "@/lib/data/studies";
 
-const values = [
-  [ClipboardCheck, "Standardize field testing", "Convert informal coordination into a repeatable, versioned testing protocol."],
-  [ShieldCheck, "Validate matched conditions", "Check synchronization, proximity, route, platform, tier, metadata, and evidence."],
-  [FileArchive, "Organize evidence & metadata", "Link synthetic records, decisions, notes, and activity in one workspace."],
-  [Scale, "Prepare review-ready exports", "Preview descriptive reports and expert review packages without legal conclusions."],
-] as const;
-
-export function OverviewClient() {
-  const pairs = useDemoStore((state) => state.pairs);
-  const events = useDemoStore((state) => state.auditEvents);
-  const metrics = calculateDashboardMetrics(pairs, demoConfig.study.targetPairCount);
-  return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-xl border border-border bg-card/90 px-5 py-7 sm:px-8 sm:py-9">
-        <div className="absolute inset-y-0 right-0 hidden w-2/5 subtle-grid opacity-60 lg:block" aria-hidden="true" />
-        <div className="relative max-w-3xl">
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">{demoConfig.product.badge}</span>
-            <span className="rounded-md border border-teal-300/20 bg-teal-300/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-200">Synthetic data only</span>
-          </div>
-          <p className="label-kicker">Research operations · technical review · evidence organization</p>
-          <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.04em] text-foreground sm:text-4xl">{demoConfig.product.name}</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">{demoConfig.product.description}</p>
-          <div className="mt-7 flex flex-wrap gap-2">
-            <Button asChild><Link href="/paired-testing-demo/dashboard">Open Study Dashboard <ArrowRight className="size-4" /></Link></Button>
-            <Button asChild variant="outline"><Link href="/paired-testing-demo/pairs/PAIR-008">Review Featured Matched Pair</Link></Button>
-            <Button asChild variant="ghost"><Link href="/paired-testing-demo/submission"><FlaskConical className="size-4" />Tester Submission</Link></Button>
-          </div>
-        </div>
-      </section>
-
-      <DisclaimerAlert />
-
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-        <Card className="data-panel">
-          <CardContent className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="label-kicker">Active demonstration study</p><h2 className="mt-2 text-lg font-semibold">{demoConfig.study.name}</h2><p className="mono mt-1 text-xs text-muted-foreground">{demoConfig.study.id}</p></div>
-              <StatusBadge status="Active Demonstration" />
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {[["Target", "100 pairs"], ["Submitted", `${pairs.length} pairs`], ["Technically valid", `${metrics.validPairs} pairs`], ["Pending review", `${metrics.pendingReviewPairs} pairs`]].map(([label, value]) =>
-                <div key={label}><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p><p className="numeric mt-1 text-lg font-semibold">{value}</p></div>)}
-            </div>
-            <Progress value={metrics.completionPercentage} className="mt-5 h-1.5" />
-            <div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>{metrics.completionPercentage.toFixed(0)}% of target collected</span><span>{demoConfig.study.testingStart.slice(0, 10)} → {demoConfig.study.testingEnd.slice(0, 10)}</span></div>
-          </CardContent>
-        </Card>
-        <Card className="data-panel">
-          <CardContent className="p-5">
-            <p className="label-kicker">Last demonstration activity</p>
-            <div className="mt-4 border-l border-border pl-4">
-              <p className="text-sm font-medium">{events[0]?.action}</p>
-              <p className="mono mt-1 text-[10px] text-muted-foreground">{events[0]?.objectId} · {formatDemoDateTime(events[0]?.timestamp)}</p>
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">{events[0]?.note}</p>
-            </div>
-            <Button asChild variant="link" className="mt-3 h-auto px-0 text-xs text-primary"><Link href="/paired-testing-demo/audit">Open activity log <ArrowRight className="size-3" /></Link></Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section>
-        <div className="mb-3"><p className="label-kicker">Demonstration value</p><h2 className="mt-2 text-lg font-semibold">A controlled workflow from protocol to review package</h2></div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {values.map(([Icon, title, description], index) => (
-            <Card key={title} className="data-panel">
-              <CardContent className="p-4"><div className="flex items-start justify-between"><Icon className="size-4 text-primary" /><span className="mono text-[10px] text-muted-foreground">0{index + 1}</span></div><h3 className="mt-5 text-sm font-semibold">{title}</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p></CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border bg-secondary/25 p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div><p className="label-kicker">Illustrative workflow</p><div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium">{["Protocol", "Paired collection", "Technical validation", "Expert review", "Evidence package preview"].map((step, index) => <span key={step} className="contents"><span className="rounded-md border border-border bg-card px-3 py-2">{step}</span>{index < 4 && <ArrowRight className="size-3 text-muted-foreground" />}</span>)}</div></div>
-          <Button asChild variant="outline"><Link href="/paired-testing-demo/protocol">View Testing Protocol</Link></Button>
-        </div>
-        <div className="mt-5 border-t border-border pt-4"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">What this demo does not do</p><p className="mt-2 text-xs leading-5 text-muted-foreground">No live rideshare integration · No real personal data · No legal conclusions · No production evidence certification</p></div>
-      </section>
-    </div>
-  );
+export function OverviewClient({ study, pairs, reviews, activity, role }: { study: Study | null; pairs: MatchedPairSummary[]; reviews: ExpertReview[]; activity: ActivityLogEvent[]; role: AppRole }) {
+  if (!study) return <div className="py-20 text-center"><h1 className="text-2xl font-semibold">No accessible study</h1><p className="mt-2 text-sm text-muted-foreground">Ask an administrator or coordinator to add your account to a study.</p>{["admin", "test_coordinator"].includes(role) ? <Button asChild className="mt-5"><Link href="/paired-testing-demo/studies">Open studies</Link></Button> : null}</div>;
+  const latest = new Map<string, ExpertReview>();
+  reviews.forEach((review) => { if (!latest.has(review.matched_pair_id)) latest.set(review.matched_pair_id, review); });
+  const pending = pairs.filter((pair) => (latest.get(pair.id)?.status ?? "pending") === "pending").length;
+  const valid = pairs.filter((pair) => pair.technical_status === "valid").length;
+  const target = study.target_pair_count ?? 0;
+  const progress = target ? Math.min(pairs.length / target * 100, 100) : 0;
+  const primary = role === "tester" ? { href: "/paired-testing-demo/assignments", label: "Open assignments" } : role === "expert_reviewer" ? { href: "/paired-testing-demo/pairs", label: "Open review queue" } : { href: "/paired-testing-demo/dashboard", label: "Open study dashboard" };
+  const recent = activity[0];
+  return <div className="space-y-6"><section className="border-y border-border py-8 sm:py-10"><div className="max-w-4xl"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={study.status} /><span className="mono text-[10px] text-muted-foreground">{study.study_code}</span></div><h1 className="mt-4 text-3xl font-semibold sm:text-4xl">{study.name}</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">{study.description || "Protocol-led paired testing, technical validation, expert review, and evidence organization."}</p><div className="mt-6 flex flex-wrap gap-2"><Button asChild><Link href={primary.href}>{primary.label}<ArrowRight className="size-4" /></Link></Button>{role !== "tester" ? <Button asChild variant="outline"><Link href="/paired-testing-demo/protocol">View protocol</Link></Button> : null}</div></div></section><section className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(300px,.7fr)]"><div className="rounded-md border border-border p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] uppercase text-primary">Active study</p><h2 className="mt-1 text-lg font-semibold">Collection and review progress</h2></div><span className="text-xs text-muted-foreground">{study.display_timezone} | {study.default_currency ?? "Currency pending"}</span></div><div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">{[["Target", target || "Not set"], ["Matched", pairs.length], ["Technically valid", valid], ["Pending review", pending]].map(([label, value]) => <div key={label}><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{value}</p></div>)}</div><Progress value={progress} className="mt-5 h-1.5" /><p className="mt-2 text-[10px] text-muted-foreground">{target ? `${progress.toFixed(0)}% of target collected` : "No pair target configured"}</p></div><aside className="rounded-md border border-border p-5"><p className="text-[10px] uppercase text-primary">Recent activity</p>{recent ? <div className="mt-4 border-l border-primary pl-4"><p className="text-sm font-medium capitalize">{recent.action.replaceAll(".", " ")}</p><p className="mt-1 text-[10px] text-muted-foreground">{recent.actor_name} | {new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: study.display_timezone }).format(new Date(recent.created_at))}</p></div> : <p className="mt-4 text-sm text-muted-foreground">No activity recorded.</p>}{role !== "tester" ? <Button asChild variant="link" className="mt-3 h-auto px-0 text-xs"><Link href="/paired-testing-demo/audit">Open activity log<ArrowRight className="size-3" /></Link></Button> : null}</aside></section>{role === "tester" ? <section><p className="text-[10px] uppercase text-primary">Testing workflow</p><h2 className="mt-1 text-lg font-semibold">Your assigned sessions</h2><div className="mt-4 max-w-md"><Workflow icon={ClipboardCheck} title="Assignments" detail="Open an assigned session and submit the required observation and evidence" href="/paired-testing-demo/assignments" /></div></section> : <section><p className="text-[10px] uppercase text-primary">Study workflow</p><h2 className="mt-1 text-lg font-semibold">From protocol to descriptive outputs</h2><div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Workflow icon={ClipboardCheck} title="Protocol" detail="Versioned controls and evidence requirements" href="/paired-testing-demo/protocol" /><Workflow icon={ShieldCheck} title="Matched validation" detail={`${pairs.length} paired observations`} href="/paired-testing-demo/pairs" /><Workflow icon={FileArchive} title="Evidence" detail="Private files and system metadata" href="/paired-testing-demo/evidence" /><Workflow icon={Scale} title="Reports" detail="Review decisions and descriptive exports" href="/paired-testing-demo/reports" /></div></section>}<section className="border-t border-border pt-5"><p className="text-xs leading-6 text-muted-foreground">A pricing difference alone does not establish unlawful discrimination. Results require interpretation under the approved methodology, repeated observations, statistical analysis, alternative explanations, and applicable law.</p></section></div>;
 }
 
+function Workflow({ icon: Icon, title, detail, href }: { icon: typeof Scale; title: string; detail: string; href: string }) { return <Link href={href} className="group rounded-md border border-border p-4 hover:border-primary/35 hover:bg-secondary"><Icon className="size-4 text-primary" /><h3 className="mt-4 text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p><ArrowRight className="mt-4 size-4 text-muted-foreground group-hover:text-primary" /></Link>; }

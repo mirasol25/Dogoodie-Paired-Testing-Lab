@@ -971,3 +971,4 @@ These are not legal or methodological criticisms. They are differences between l
 - Tests: `src/tests`
 - Existing overview: `README.md`
 - Assumption register: `ASSUMPTIONS.md`
+> **Archived prototype reference:** This walkthrough documents the former fixture/Zustand interface and is not the current product contract. Use the root [README](../README.md) and [ACCEPTANCE_QA.md](./ACCEPTANCE_QA.md) for the database-backed workflow.

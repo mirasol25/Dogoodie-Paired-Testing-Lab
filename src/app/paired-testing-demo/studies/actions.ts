@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireRole } from "@/lib/auth/server";
 import { ACTIVE_STUDY_COOKIE } from "@/lib/data/active-study";
-import { createStudyWithInitialRoute, getAccessibleStudyById, StudyDataError } from "@/lib/data/studies";
+import { createStudyWithInitialRoute, getAccessibleStudyById, StudyDataError, transitionStudyStatus } from "@/lib/data/studies";
 
 export interface StudyActionResult {
   ok: boolean;
@@ -32,7 +32,7 @@ export async function createStudyAction(input: unknown): Promise<StudyActionResu
 }
 
 export async function selectStudyAction(studyId: string): Promise<StudyActionResult> {
-  await requireRole(["admin", "test_coordinator", "expert_reviewer"], "/paired-testing-demo");
+  await requireRole(["admin", "test_coordinator", "expert_reviewer", "law_firm_viewer"], "/paired-testing-demo");
   const study = await getAccessibleStudyById(studyId);
   if (!study) return { ok: false, message: "The selected study is unavailable." };
   (await cookies()).set(ACTIVE_STUDY_COOKIE, study.id, {
@@ -44,4 +44,16 @@ export async function selectStudyAction(studyId: string): Promise<StudyActionRes
   });
   revalidatePath("/paired-testing-demo", "layout");
   return { ok: true, message: `${study.name} is now active.`, studyId: study.id };
+}
+
+export async function transitionStudyStatusAction(studyId: string, status: "active" | "paused" | "completed" | "archived"): Promise<StudyActionResult> {
+  await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
+  try {
+    const study = await transitionStudyStatus(studyId, status);
+    revalidatePath("/paired-testing-demo", "layout");
+    return { ok: true, message: `${study.name} is now ${study.status}.`, studyId: study.id };
+  } catch (error) {
+    if (error instanceof StudyDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The study status could not be changed." };
+  }
 }

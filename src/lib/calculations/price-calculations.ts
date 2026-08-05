@@ -2,9 +2,12 @@ export function absolutePriceDifference(priceA: number, priceB: number): number 
   return Math.abs(priceA - priceB);
 }
 
+export function directionalPriceDifference(priceA: number, priceB: number): number {
+  return priceB - priceA;
+}
+
 export function percentagePriceDifference(priceA: number, priceB: number): number {
-  const baseline = Math.min(priceA, priceB);
-  return baseline === 0 ? 0 : (absolutePriceDifference(priceA, priceB) / baseline) * 100;
+  return priceA === 0 ? 0 : (directionalPriceDifference(priceA, priceB) / priceA) * 100;
 }
 
 export function higherPricedTester(

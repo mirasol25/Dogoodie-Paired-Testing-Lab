@@ -74,6 +74,58 @@ export class AssignmentDataError extends Error {
   }
 }
 
+export interface AssignmentOperationalSummary {
+  submissions: Array<{ id: string; userId: string; status: SubmissionRow["status"]; submittedAt: string | null; evidenceCount: number; completeEvidenceCount: number }>;
+  pair: { id: string; pairCode: string; technicalStatus: string; evidenceStatus: string } | null;
+}
+
+export async function reopenSubmission(submissionId: string, reason: string): Promise<SubmissionRow> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_reopen_submission", {
+    p_submission_id: submissionId,
+    p_reason: reason,
+  });
+  if (error) throw new AssignmentDataError(error.message || "The submission could not be reopened.");
+  if (!data) throw new AssignmentDataError("The reopened submission was not returned.");
+  return data;
+}
+
+export async function cancelAssignment(assignmentId: string, reason: string): Promise<AssignmentRow> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("cancel_assignment", { p_assignment_id: assignmentId, p_reason: reason });
+  if (error) throw new AssignmentDataError(error.message || "The assignment could not be cancelled.");
+  if (!data) throw new AssignmentDataError("The cancelled assignment was not returned.");
+  return data;
+}
+
+export async function expireOverdueAssignments(studyId: string): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("expire_overdue_assignments", { p_study_id: studyId });
+  if (error) throw new AssignmentDataError(error.message || "Overdue assignments could not be processed.");
+  return data ?? 0;
+}
+
+export async function getAssignmentOperationalSummary(assignmentId: string): Promise<AssignmentOperationalSummary> {
+  const supabase = await createClient();
+  const [submissionResult, pairResult] = await Promise.all([
+    supabase.from("submissions").select("id,user_id,status,submitted_at").eq("assignment_id", assignmentId),
+    supabase.from("matched_pairs").select("id,pair_code,technical_status,evidence_status").eq("assignment_id", assignmentId).maybeSingle(),
+  ]);
+  if (submissionResult.error || pairResult.error) throw new AssignmentDataError("Assignment progress could not be loaded.");
+  const submissionIds = submissionResult.data.map((submission) => submission.id);
+  const evidenceResult = submissionIds.length
+    ? await supabase.from("evidence_files").select("submission_id,integrity_status").in("submission_id", submissionIds)
+    : { data: [], error: null };
+  if (evidenceResult.error) throw new AssignmentDataError("Assignment evidence progress could not be loaded.");
+  return {
+    submissions: submissionResult.data.map((submission) => {
+      const files = evidenceResult.data.filter((file) => file.submission_id === submission.id);
+      return { id: submission.id, userId: submission.user_id, status: submission.status, submittedAt: submission.submitted_at, evidenceCount: files.length, completeEvidenceCount: files.filter((file) => file.integrity_status === "complete").length };
+    }),
+    pair: pairResult.data ? { id: pairResult.data.id, pairCode: pairResult.data.pair_code, technicalStatus: pairResult.data.technical_status, evidenceStatus: pairResult.data.evidence_status } : null,
+  };
+}
+
 export async function createAssignment(input: CreateAssignmentInput): Promise<AssignmentRow> {
   const parsed = createAssignmentSchema.safeParse(input);
   if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid assignment.");

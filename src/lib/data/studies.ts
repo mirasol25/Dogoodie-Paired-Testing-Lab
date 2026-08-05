@@ -28,6 +28,23 @@ export interface ReviewerStudyWorkload {
   rejected: number;
 }
 
+export interface StudyCompletionReadiness {
+  ready: boolean;
+  assignments: { total: number; completed: number; cancelled: number; expired: number; unfinished: number };
+  pairs: { total: number; technically_processed: number; missing_for_completed_assignments: number };
+  evidence: { complete: number; required: number };
+  reviews: { pending: number; accepted: number; flagged: number; rejected: number };
+  blockers: string[];
+}
+
+export async function getStudyCompletionReadiness(studyId: string): Promise<StudyCompletionReadiness> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_study_completion_readiness", { p_study_id: studyId });
+  if (error) throw new StudyDataError(error.message || "Completion readiness could not be loaded.", "DATABASE");
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new StudyDataError("Completion readiness was invalid.", "DATABASE");
+  return data as unknown as StudyCompletionReadiness;
+}
+
 export async function listReviewerStudyWorkloads(studyIds: string[], reviewerId: string): Promise<ReviewerStudyWorkload[]> {
   if (!studyIds.length) return [];
   const supabase = await createClient();
@@ -81,6 +98,24 @@ export async function getAccessibleStudyById(
   const supabase = suppliedClient ?? await createClient();
   const { data, error } = await supabase.from("studies").select("*").eq("id", studyId).maybeSingle();
   if (error) throw new StudyDataError("The study could not be loaded.", "DATABASE");
+  return data;
+}
+
+export async function transitionStudyStatus(
+  studyId: string,
+  status: Study["status"],
+  suppliedClient?: SupabaseClient<Database>,
+): Promise<Study> {
+  const supabase = suppliedClient ?? await createClient();
+  const { data, error } = await supabase.rpc("transition_study_status", {
+    p_study_id: studyId,
+    p_new_status: status,
+  });
+  if (error) {
+    if (error.code === "42501") throw new StudyDataError(error.message || "You cannot change this study status.", "FORBIDDEN");
+    throw new StudyDataError(error.message || "The study status could not be changed.", "VALIDATION");
+  }
+  if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
   return data;
 }
 

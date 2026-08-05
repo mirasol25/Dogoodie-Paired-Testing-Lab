@@ -1,47 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, ClipboardCheck, Columns2, FileArchive, FileText, FlaskConical, History,
-  ChevronRight, Home, LayoutDashboard, LogOut, Menu, RefreshCcw, ShieldCheck, Users,
+  Activity, ClipboardCheck, Columns2, FileArchive, FileText, History,
+  ChevronRight, Home, LayoutDashboard, LogOut, Menu, ShieldCheck, Users,
 } from "lucide-react";
-import { toast } from "sonner";
 import { signOutAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader,
-  DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { demoConfig } from "@/config/paired-testing-demo.config";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
-import { useDemoStore } from "@/store/paired-testing-demo.store";
-import type { NavigationItem, Role } from "@/types/paired-testing-demo.types";
+import type { NavigationItem } from "@/types/paired-testing-demo.types";
 
-const icons = { Activity, ClipboardCheck, Columns2, FileArchive, FileText, FlaskConical, History, Home, LayoutDashboard, Users };
-
-export function DemoRoleSwitcher({ className }: { className?: string }) {
-  const hydrated = useHydrated();
-  const role = useDemoStore((state) => state.role);
-  const setRole = useDemoStore((state) => state.setRole);
-  return (
-    <div className={cn("min-w-[180px]", className)}>
-      <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">View as</p>
-      <Select value={hydrated ? role : "expert_reviewer"} onValueChange={(value) => setRole(value as Role)}>
-        <SelectTrigger className="h-9 w-full border-border bg-secondary/70 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.entries(demoConfig.roles).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
+const icons = { Activity, ClipboardCheck, Columns2, FileArchive, FileText, History, Home, LayoutDashboard, Users };
 
 export interface AppShellUser {
   email: string;
@@ -102,40 +74,20 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
   );
 }
 
-function ResetDemoDialog({ compact = false }: { compact?: boolean }) {
-  const reset = useDemoStore((state) => state.resetDemoData);
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size={compact ? "icon-sm" : "sm"} className={cn("text-muted-foreground hover:text-foreground", !compact && "w-full justify-start")}>
-          <RefreshCcw className="size-3.5" />
-          {!compact && "Reset Demo Data"}
-          {compact && <span className="sr-only">Reset Demo Data</span>}
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Reset demonstration data?</DialogTitle>
-          <DialogDescription>
-            This restores the original deterministic fixtures, review decisions, assignments, drafts, and activity events.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-          <DialogClose asChild>
-            <Button onClick={() => { reset(); toast.success("Demonstration data restored."); }}>Reset Demo Data</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowedPaths: Partial<Record<AppShellUser["role"], string[]>> = {
     tester: ["/paired-testing-demo", "/paired-testing-demo/assignments"],
     expert_reviewer: [
+      "/paired-testing-demo",
+      "/paired-testing-demo/dashboard",
+      "/paired-testing-demo/protocol",
+      "/paired-testing-demo/pairs",
+      "/paired-testing-demo/evidence",
+      "/paired-testing-demo/audit",
+      "/paired-testing-demo/reports",
+    ],
+    law_firm_viewer: [
       "/paired-testing-demo",
       "/paired-testing-demo/dashboard",
       "/paired-testing-demo/protocol",
@@ -191,30 +143,13 @@ function Brand() {
 
 export function AppShell({ children, user, activeStudy }: { children: React.ReactNode; user: AppShellUser; activeStudy: AppShellStudy | null }) {
   const pathname = usePathname();
-  const previewRole = useDemoStore((state) => state.role);
-  const setPreviewRole = useDemoStore((state) => state.setRole);
-  const databaseRoleToPreviewRole: Record<AppShellUser["role"], Role> = {
-    admin: "expert_reviewer",
-    test_coordinator: "coordinator",
-    tester: "tester",
-    expert_reviewer: "expert_reviewer",
-    law_firm_viewer: "law_firm_viewer",
-  };
-  const expectedPreviewRole = databaseRoleToPreviewRole[user.role];
-
-  useEffect(() => {
-    // This keeps legacy fixture-only UI affordances aligned with the real role.
-    // Database authorization remains enforced exclusively by server checks/RLS.
-    if (previewRole !== expectedPreviewRole) setPreviewRole(expectedPreviewRole);
-  }, [expectedPreviewRole, previewRole, setPreviewRole]);
-
   const current = demoConfig.navigation.find((item) =>
     item.href === "/paired-testing-demo" ? pathname === item.href : pathname.startsWith(item.href));
   return (
     <div className="min-h-screen">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border/80 bg-[#08120e]/95 p-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand />
-        {user.role !== "tester" ? <Link href={user.role === "expert_reviewer" ? "/paired-testing-demo/review-studies" : "/paired-testing-demo/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
+        {user.role !== "tester" ? <Link href={user.role === "expert_reviewer" ? "/paired-testing-demo/review-studies" : user.role === "law_firm_viewer" ? "/paired-testing-demo/view-studies" : "/paired-testing-demo/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
           <div className="flex items-center justify-between gap-2">
             <span className="mono truncate text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span>
             <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -225,7 +160,6 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
         <div className={cn("flex-1 overflow-y-auto", user.role === "tester" ? "mt-8" : "mt-5")}><Navigation role={user.role} /></div>
         <div className="space-y-3 border-t border-border/70 pt-4">
           <AccountPanel user={user} />
-          {["admin", "test_coordinator"].includes(user.role) ? <ResetDemoDialog /> : null}
           <div className="flex items-center justify-between px-2 text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
             <span>{demoConfig.product.badge}</span><span>{demoConfig.product.version}</span>
           </div>
@@ -243,6 +177,7 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
                 <SheetHeader className="px-0 pt-0"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
                 <Brand />
                 {user.role === "expert_reviewer" ? <Link href="/paired-testing-demo/review-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
+                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
                 <div className="mt-6"><Navigation role={user.role} /></div>
                 <div className="mt-6 border-t border-border pt-5"><AccountPanel user={user} /></div>
               </SheetContent>
@@ -253,9 +188,8 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden rounded-md border border-teal-300/20 bg-teal-300/[0.06] px-2.5 py-1 text-[10px] font-medium text-teal-200 sm:inline-flex">Synthetic data</span>
+            <span className="hidden rounded-md border border-teal-300/20 bg-teal-300/[0.06] px-2.5 py-1 text-[10px] font-medium text-teal-200 sm:inline-flex">Internal pilot</span>
             <span className="hidden max-w-52 truncate text-[11px] text-muted-foreground xl:inline">{user.displayName || user.email} · {roleLabels[user.role]}</span>
-            {["admin", "test_coordinator"].includes(user.role) ? <ResetDemoDialog compact /> : null}
             <AccountPanel user={user} compact />
           </div>
         </header>

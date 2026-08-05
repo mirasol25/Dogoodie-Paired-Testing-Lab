@@ -241,3 +241,4 @@ The suggested timing below totals approximately ten minutes.
 - Separate confirmed requirements from open questions.
 - Use **Reset Demo Data** if you want to restore PAIR-008 to Pending and remove the local assignment/event changes.
 - Remember that Reset does not directly clear local file objects in an already-open tester component; navigation or refresh does.
+> **Archived prototype reference:** This script describes the former fixture/Zustand demonstration and is not an acceptance guide for the current database-backed application. Use [ACCEPTANCE_QA.md](./ACCEPTANCE_QA.md) for current verification.

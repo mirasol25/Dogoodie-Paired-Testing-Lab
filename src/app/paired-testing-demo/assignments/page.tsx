@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { canManageAssignments } from "@/lib/auth/assignment-permissions";
 import { requireRole } from "@/lib/auth/server";
 import { getActiveStudy } from "@/lib/data/active-study";
-import { getAssignmentSetupOptions, listStudyAssignments } from "@/lib/data/assignments";
+import { expireOverdueAssignments, getAssignmentSetupOptions, listStudyAssignments } from "@/lib/data/assignments";
 import { listStudyMembers } from "@/lib/data/study-members";
 
 export default async function AssignmentsPage() {
@@ -15,6 +15,7 @@ export default async function AssignmentsPage() {
   }
 
   const canManage = canManageAssignments(identity.profile.role);
+  if (canManage && ["active", "paused"].includes(study.status)) await expireOverdueAssignments(study.id);
   const [assignments, setupOptions, members] = await Promise.all([
     listStudyAssignments(study.id),
     getAssignmentSetupOptions(study.id, study.configuration),

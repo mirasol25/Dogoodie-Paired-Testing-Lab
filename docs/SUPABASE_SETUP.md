@@ -1,6 +1,6 @@
 # Supabase Setup and Internal User Bootstrap
 
-This guide connects a new Supabase project to the Phase 0 foundation. The repository contains integration code and migrations, but it does not contain credentials or an external project link.
+This guide connects a Supabase project to the internal paired-testing application. The repository contains integration code and ordered migrations, but it does not contain credentials or an external project link.
 
 ## 1. Create the Supabase project
 
@@ -102,13 +102,15 @@ Then apply them:
 npx supabase@latest db push
 ```
 
-The ordered migrations create:
+The ordered migrations create and evolve:
 
 1. Enums, profiles, roles, and Auth triggers
 2. Core relational tables and indexes
 3. Security-definer authorization helpers
 4. Row Level Security grants and policies
 5. The private evidence bucket and Storage policies
+6. Study, protocol, membership, assignment, submission, matching, validation, review, activity, and reporting workflows
+7. Study and assignment lifecycle controls, submission revision history, and viewer release gating
 
 Do not run `supabase db reset --linked` against a production or shared project. That command is destructive.
 
@@ -121,7 +123,7 @@ npx supabase@latest gen types typescript --linked --schema public > src/types/da
 npm run typecheck
 ```
 
-The repository includes a generated-compatible Phase 0 type snapshot so the code compiles before a project exists. The linked schema becomes the source of truth after migration.
+The repository includes a generated-compatible type snapshot so the code compiles before a project exists. The linked schema becomes the source of truth after migration.
 
 ## 8. Create the first internal Auth user
 
@@ -235,7 +237,7 @@ Confirm:
 5. Tester A cannot select Tester B's `assignment_testers`, submissions, or evidence.
 6. A tester cannot insert an assignment or study membership.
 7. A reviewer can read authorized study submissions but cannot edit validation results.
-8. A law-firm viewer can read authorized study outputs but cannot read raw submissions/evidence or modify records.
+8. A law-firm viewer cannot read active/paused study workflow outputs, can inspect completed/archived assigned outputs and evidence metadata, cannot open private raw evidence files, and cannot modify records.
 9. A user cannot change `user_roles` or their protected profile fields.
 10. The `paired-testing-evidence` bucket is private and has no public URL.
 

@@ -473,3 +473,4 @@ The prototype has not established willingness to pay, workflow fit, savings, or 
 **Review the current synthetic prototype with the intended expert witness and use it as a visual discovery tool before beginning any production build.**
 
 The immediate objective should be to produce a validated workflow and assumption list—not to add production infrastructure to an unvalidated methodology.
+> **Archived proposal draft:** This document predates the current database-backed workflow and directional fare formula. It is retained only as historical discovery material and must not be used as implementation or acceptance criteria.

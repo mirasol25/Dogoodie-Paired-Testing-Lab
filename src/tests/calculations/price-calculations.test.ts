@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   absolutePriceDifference,
+  directionalPriceDifference,
   higherPricedTester,
   median,
   percentagePriceDifference,
@@ -13,8 +14,13 @@ describe("price calculations", () => {
     expect(absolutePriceDifference(47.8, 64.05)).toBeCloseTo(16.25, 8);
   });
 
-  it("calculates percentage variance against the lower quote", () => {
+  it("calculates percentage variance against Side A", () => {
     expect(percentagePriceDifference(47.8, 64.05)).toBeCloseTo(33.9958, 3);
+  });
+
+  it("keeps the Side B minus Side A direction", () => {
+    expect(directionalPriceDifference(64.05, 47.8)).toBeCloseTo(-16.25, 8);
+    expect(percentagePriceDifference(64.05, 47.8)).toBeCloseTo(-25.3708, 3);
   });
 
   it("identifies the higher-priced tester and ties", () => {

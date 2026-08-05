@@ -92,10 +92,31 @@ export async function listPairValidationResults(pairId: string): Promise<Matched
   return data;
 }
 
+export async function listStudyValidationResults(pairIds: string[]): Promise<MatchedPairValidationResult[]> {
+  if (!pairIds.length) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("validation_results")
+    .select("*")
+    .in("matched_pair_id", pairIds)
+    .order("matched_pair_id")
+    .order("created_at");
+  if (error) throw new MatchedPairDataError("Study validation results could not be loaded.");
+  return data;
+}
+
 export async function listPairReviews(pairId: string): Promise<ExpertReview[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("expert_reviews").select("*").eq("matched_pair_id", pairId).order("updated_at", { ascending: false });
   if (error) throw new MatchedPairDataError("Expert review history could not be loaded.");
+  return data;
+}
+
+export async function listStudyReviews(pairIds: string[]): Promise<ExpertReview[]> {
+  if (!pairIds.length) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("expert_reviews").select("*").in("matched_pair_id", pairIds).order("updated_at", { ascending: false });
+  if (error) throw new MatchedPairDataError("Study review decisions could not be loaded.");
   return data;
 }
 

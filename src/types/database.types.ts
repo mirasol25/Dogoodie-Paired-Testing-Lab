@@ -350,6 +350,7 @@ export type Database = {
       matched_pairs: {
         Row: {
           absolute_fare_difference: number | null
+          directional_fare_difference: number | null
           assignment_id: string
           created_at: string
           evidence_status: Database["public"]["Enums"]["evidence_integrity_status"]
@@ -368,6 +369,7 @@ export type Database = {
         }
         Insert: {
           absolute_fare_difference?: number | null
+          directional_fare_difference?: number | null
           assignment_id: string
           created_at?: string
           evidence_status?: Database["public"]["Enums"]["evidence_integrity_status"]
@@ -386,6 +388,7 @@ export type Database = {
         }
         Update: {
           absolute_fare_difference?: number | null
+          directional_fare_difference?: number | null
           assignment_id?: string
           created_at?: string
           evidence_status?: Database["public"]["Enums"]["evidence_integrity_status"]
@@ -1036,6 +1039,80 @@ export type Database = {
           },
         ]
       }
+      submission_revisions: {
+        Row: {
+          assignment_id: string
+          id: string
+          pair_snapshot: Json | null
+          reason: string
+          reopened_at: string
+          reopened_by: string
+          review_snapshot: Json
+          revision_number: number
+          study_id: string
+          submission_id: string
+          submission_snapshot: Json
+          validation_snapshot: Json
+        }
+        Insert: {
+          assignment_id: string
+          id?: string
+          pair_snapshot?: Json | null
+          reason: string
+          reopened_at?: string
+          reopened_by: string
+          review_snapshot?: Json
+          revision_number: number
+          study_id: string
+          submission_id: string
+          submission_snapshot: Json
+          validation_snapshot?: Json
+        }
+        Update: {
+          assignment_id?: string
+          id?: string
+          pair_snapshot?: Json | null
+          reason?: string
+          reopened_at?: string
+          reopened_by?: string
+          review_snapshot?: Json
+          revision_number?: number
+          study_id?: string
+          submission_id?: string
+          submission_snapshot?: Json
+          validation_snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_revisions_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_revisions_reopened_by_fkey"
+            columns: ["reopened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_revisions_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_revisions_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           assigned_at: string
@@ -1133,6 +1210,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_reopen_submission: {
+        Args: { p_reason: string; p_submission_id: string }
+        Returns: Database["public"]["Tables"]["submissions"]["Row"]
+      }
+      record_report_export: {
+        Args: { p_export_kind: string; p_study_id: string }
+        Returns: undefined
+      }
       save_expert_review: {
         Args: {
           p_matched_pair_id: string
@@ -1145,6 +1230,25 @@ export type Database = {
       submit_tester_observation: {
         Args: { p_assignment_id: string }
         Returns: Database["public"]["Tables"]["submissions"]["Row"]
+      }
+      transition_study_status: {
+        Args: {
+          p_new_status: Database["public"]["Enums"]["study_status"]
+          p_study_id: string
+        }
+        Returns: Database["public"]["Tables"]["studies"]["Row"]
+      }
+      cancel_assignment: {
+        Args: { p_assignment_id: string; p_reason: string }
+        Returns: Database["public"]["Tables"]["assignments"]["Row"]
+      }
+      expire_overdue_assignments: {
+        Args: { p_study_id: string }
+        Returns: number
+      }
+      get_study_completion_readiness: {
+        Args: { p_study_id: string }
+        Returns: Json
       }
       register_submission_evidence: {
         Args: {
@@ -1438,6 +1542,7 @@ export type Database = {
         | "awaiting_partner"
         | "ready_for_validation"
         | "completed"
+        | "expired"
         | "cancelled"
       assignment_tester_status:
         | "invited"
@@ -1604,6 +1709,7 @@ export const Constants = {
         "awaiting_partner",
         "ready_for_validation",
         "completed",
+        "expired",
         "cancelled",
       ],
       assignment_tester_status: [
