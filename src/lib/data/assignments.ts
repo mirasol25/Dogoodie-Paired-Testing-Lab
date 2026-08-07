@@ -259,6 +259,10 @@ export async function getLatestTesterTechnicalProfile(userId: string): Promise<P
     .select("network_type,device_type,operating_system,operating_system_version,app_version")
     .eq("id", userId)
     .maybeSingle();
+  // Allow the assignment screen to remain usable while a deployment is
+  // catching up with the profile-device migration. Once the columns exist,
+  // normal persistent-profile loading resumes automatically.
+  if (error && (error.code === "42703" || /(?:network_type|device_type|operating_system|app_version)/i.test(error.message))) return null;
   if (error) throw new AssignmentDataError("Your saved device profile could not be loaded.");
   if (!data?.network_type || !data.device_type || !data.operating_system || !data.operating_system_version || !data.app_version) return null;
   return data;

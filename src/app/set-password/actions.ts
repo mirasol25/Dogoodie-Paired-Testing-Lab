@@ -50,7 +50,8 @@ export async function setPasswordAction(
   const { error: profileUpdateError } = await admin
     .from("profiles")
     .update({ account_status: "active", tester_country_code: parsed.data.testerCountryCode })
-    .eq("id", user.id);
+    .eq("id", user.id)
+    .eq("account_status", "pending");
   if (profileUpdateError) return { message: profileUpdateError.message || "Your tester location could not be saved." };
 
   // PostgREST may report an update-response error after the database has
