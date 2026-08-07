@@ -252,17 +252,15 @@ export async function getOwnAssignmentSubmission(assignmentId: string, userId: s
   return data;
 }
 
-export async function getLatestTesterTechnicalProfile(userId: string, currentAssignmentId: string): Promise<Pick<SubmissionRow, "network_type" | "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null> {
+export async function getLatestTesterTechnicalProfile(userId: string): Promise<Pick<SubmissionRow, "network_type" | "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("submissions")
+    .from("profiles")
     .select("network_type,device_type,operating_system,operating_system_version,app_version")
-    .eq("user_id", userId)
-    .neq("assignment_id", currentAssignmentId)
-    .order("updated_at", { ascending: false })
-    .limit(1)
+    .eq("id", userId)
     .maybeSingle();
-  if (error) throw new AssignmentDataError("Your previous technical profile could not be loaded.");
+  if (error) throw new AssignmentDataError("Your saved device profile could not be loaded.");
+  if (!data?.network_type || !data.device_type || !data.operating_system || !data.operating_system_version || !data.app_version) return null;
   return data;
 }
 

@@ -551,6 +551,11 @@ export type Database = {
           display_name: string | null
           email: string
           id: string
+          network_type: string | null
+          device_type: string | null
+          operating_system: string | null
+          operating_system_version: string | null
+          app_version: string | null
           tester_country_code: string | null
           updated_at: string
         }
@@ -560,6 +565,11 @@ export type Database = {
           display_name?: string | null
           email: string
           id: string
+          network_type?: string | null
+          device_type?: string | null
+          operating_system?: string | null
+          operating_system_version?: string | null
+          app_version?: string | null
           tester_country_code?: string | null
           updated_at?: string
         }
@@ -569,6 +579,11 @@ export type Database = {
           display_name?: string | null
           email?: string
           id?: string
+          network_type?: string | null
+          device_type?: string | null
+          operating_system?: string | null
+          operating_system_version?: string | null
+          app_version?: string | null
           tester_country_code?: string | null
           updated_at?: string
         }

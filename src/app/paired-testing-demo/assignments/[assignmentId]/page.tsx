@@ -21,7 +21,7 @@ export default async function AssignmentDetailsPage({ params }: { params: Promis
   const canManage = canManageAssignments(identity.profile.role);
   const [submission, technicalProfile] = await Promise.all([
     getOwnAssignmentSubmission(assignment.id, identity.user.id),
-    getLatestTesterTechnicalProfile(identity.user.id, assignment.id),
+    getLatestTesterTechnicalProfile(identity.user.id),
   ]);
   const evidence = await getOwnSubmissionEvidence(submission?.id ?? null, identity.user.id);
   const operations = canManage ? await getAssignmentOperationalSummary(assignment.id) : null;
