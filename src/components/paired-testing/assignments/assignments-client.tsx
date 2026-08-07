@@ -100,9 +100,11 @@ function localInputValue(value: string | null, timezone: string) {
 function AssignmentSetupDialog({ study, options, testers, capacity }: { study: Study; options: AssignmentSetupOptions; testers: AssignmentTesterOption[]; capacity: StudyCollectionCapacity }) {
   const defaultService = options.services[0]?.id ?? "";
   const defaultServiceDetails = options.services[0];
-  const defaultTesterBService = study.study_type === "cross_platform_comparison" && defaultServiceDetails
-    ? options.services.find((service) => service.platformId !== defaultServiceDetails.platformId && service.normalizedCategory === defaultServiceDetails.normalizedCategory)?.id ?? ""
-    : defaultService;
+  const defaultTesterBService = defaultServiceDetails
+    ? study.study_type === "cross_platform_comparison"
+      ? options.services.find((service) => service.platformId !== defaultServiceDetails.platformId && service.normalizedCategory === defaultServiceDetails.normalizedCategory)?.id ?? ""
+      : options.services.find((service) => service.platformId === defaultServiceDetails.platformId && service.id !== defaultServiceDetails.id)?.id ?? defaultService
+    : "";
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [pending, startTransition] = useTransition();
@@ -158,7 +160,7 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
       protocolId,
       routeId,
       testerAServiceId,
-      testerBServiceId: isCrossPlatform ? testerBServiceId : testerAServiceId,
+      testerBServiceId,
       testingDate,
       startTime,
       endTime,
@@ -175,6 +177,10 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
       if (testerAService && serviceB && (testerAService.platformId === serviceB.platformId || testerAService.normalizedCategory !== serviceB.normalizedCategory)) {
         nextErrors.testerBServiceId = "Select the same ride category from a different provider.";
       }
+    }
+    if (!isCrossPlatform) {
+      const serviceB = options.services.find((service) => service.id === testerBServiceId);
+      if (testerAService && serviceB && testerAService.platformId !== serviceB.platformId) nextErrors.testerBServiceId = "Select another service from the same provider.";
     }
     if (testerPairs.length > maximumPairs) nextErrors.testerPairs = `Select no more than ${maximumPairs} pair${maximumPairs === 1 ? "" : "s"} for the remaining study capacity.`;
     setErrors(nextErrors);
@@ -195,7 +201,7 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
 
   function submitAssignmentBatch() {
     startTransition(async () => {
-      const result = await createAssignmentBatchAction({ studyId: study.id, protocolId, routeId, testerAServiceId, testerBServiceId: isCrossPlatform ? testerBServiceId : testerAServiceId, testingDate, startTime, endTime, testerPairs, timezone, instructions });
+      const result = await createAssignmentBatchAction({ studyId: study.id, protocolId, routeId, testerAServiceId, testerBServiceId, testingDate, startTime, endTime, testerPairs, timezone, instructions });
       if (!result.ok) {
         toast.error(result.message);
         return;
@@ -225,7 +231,7 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
         {routeId ? (() => { const route = options.routes.find((item) => item.id === routeId); return route ? <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2"><div className="border-b border-border p-3 sm:border-b-0 sm:border-r"><p className="text-[10px] uppercase text-muted-foreground">Pickup</p><p className="mt-1.5 text-xs font-medium">{route.pickup}</p></div><div className="p-3"><p className="text-[10px] uppercase text-muted-foreground">Destination</p><p className="mt-1.5 text-xs font-medium">{route.destination}</p></div></div> : null; })() : null}
         <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border">
           <LockedField label={isCrossPlatform ? "Tester A provider and tier" : "Provider and ride tier"} value={testerAService ? `${testerAService.platformName} - ${testerAService.serviceName}` : "Unavailable"} detail={testerAService?.normalizedCategory.replaceAll("_", " ")} />
-          {isCrossPlatform ? <LockedField label="Tester B provider and tier" value={options.services.find((service) => service.id === testerBServiceId) ? `${options.services.find((service) => service.id === testerBServiceId)?.platformName} - ${options.services.find((service) => service.id === testerBServiceId)?.serviceName}` : "Unavailable"} detail={testerAService?.normalizedCategory.replaceAll("_", " ")} /> : <LockedField label="Tester B provider and tier" value={testerAService ? `${testerAService.platformName} - ${testerAService.serviceName}` : "Unavailable"} detail="Same fixed service as Tester A" />}
+          <LockedField label="Tester B provider and tier" value={options.services.find((service) => service.id === testerBServiceId) ? `${options.services.find((service) => service.id === testerBServiceId)?.platformName} - ${options.services.find((service) => service.id === testerBServiceId)?.serviceName}` : "Unavailable"} detail={isCrossPlatform ? testerAService?.normalizedCategory.replaceAll("_", " ") : "Same provider; assigned comparison service"} />
         </div>
         </section>
         <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-sm font-semibold">Testing window</p><p className="mt-1 text-xs text-muted-foreground">One synchronized session per tester pair</p></div><div className="text-right"><p className="mono text-[10px] font-medium text-primary">{timezone}</p><p className="mt-1 text-[10px] text-muted-foreground">{currentStudyDateTime.replace("T", " ")}</p></div></div>
@@ -237,7 +243,7 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
         </div>
         <p className="text-[11px] text-muted-foreground">Schedule interpreted in the route timezone.</p></section>
         <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={continueToPair}>Continue</Button></div>
-        </> : step === 1 ? <TesterPairStep protocol={options.protocols.find((protocol) => protocol.id === protocolId)} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === (isCrossPlatform ? testerBServiceId : testerAServiceId))} testers={testers} pairs={testerPairs} errors={errors} onChange={updateTesterPair} onBack={() => { setStep(0); setErrors({}); }} onContinue={continueToReview} /> : <AssignmentReview study={study} protocol={options.protocols.find((protocol) => protocol.id === protocolId)} route={selectedRoute} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === (isCrossPlatform ? testerBServiceId : testerAServiceId))} testers={testers} pairs={testerPairs} testingDate={testingDate} startTime={startTime} endTime={endTime} timezone={timezone} instructions={instructions} pending={pending} onInstructionsChange={setInstructions} onBack={() => setStep(1)} onCreate={submitAssignmentBatch} />}
+        </> : step === 1 ? <TesterPairStep protocol={options.protocols.find((protocol) => protocol.id === protocolId)} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} pairs={testerPairs} errors={errors} onChange={updateTesterPair} onBack={() => { setStep(0); setErrors({}); }} onContinue={continueToReview} /> : <AssignmentReview study={study} protocol={options.protocols.find((protocol) => protocol.id === protocolId)} route={selectedRoute} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} pairs={testerPairs} testingDate={testingDate} startTime={startTime} endTime={endTime} timezone={timezone} instructions={instructions} pending={pending} onInstructionsChange={setInstructions} onBack={() => setStep(1)} onCreate={submitAssignmentBatch} />}
       </div>}
     </DialogContent>
   </Dialog>;

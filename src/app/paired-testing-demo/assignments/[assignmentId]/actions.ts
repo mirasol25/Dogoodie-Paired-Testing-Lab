@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth/server";
-import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, reopenSubmission, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
+import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
 import { requireRole } from "@/lib/auth/server";
+import { ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
 
 export async function cancelAssignmentAction(assignmentId: string, reason: string): Promise<{ ok: boolean; message: string }> {
   await requireRole(["admin", "test_coordinator"], `/paired-testing-demo/assignments/${assignmentId}`);
@@ -16,22 +17,6 @@ export async function cancelAssignmentAction(assignmentId: string, reason: strin
   } catch (error) {
     if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
     return { ok: false, message: "The assignment could not be cancelled." };
-  }
-}
-
-export async function reopenSubmissionAction(assignmentId: string, submissionId: string, reason: string): Promise<{ ok: boolean; message: string }> {
-  await requireRole(["admin"], `/paired-testing-demo/assignments/${assignmentId}`);
-  try {
-    const submission = await reopenSubmission(submissionId, reason);
-    revalidatePath("/paired-testing-demo/assignments");
-    revalidatePath(`/paired-testing-demo/assignments/${assignmentId}`);
-    revalidatePath("/paired-testing-demo/pairs");
-    revalidatePath("/paired-testing-demo/reports");
-    revalidatePath("/paired-testing-demo/audit");
-    return { ok: true, message: `${submission.submission_code ?? "Observation"} was reopened for correction.` };
-  } catch (error) {
-    if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
-    return { ok: false, message: "The submission could not be reopened." };
   }
 }
 
@@ -83,6 +68,28 @@ export async function registerEvidenceAction(input: unknown): Promise<{ ok: bool
   } catch (error) {
     if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
     return { ok: false, message: "Evidence could not be registered." };
+  }
+}
+
+export async function ensureScreenshotDraftAction(assignmentId: string): Promise<{ ok: boolean; message: string; submissionId?: string }> {
+  await requireActiveUser(`/paired-testing-demo/assignments/${assignmentId}`);
+  try {
+    const submission = await ensureScreenshotDraft(assignmentId);
+    revalidatePath(`/paired-testing-demo/assignments/${assignmentId}`);
+    return { ok: true, message: "Draft created for screenshot upload.", submissionId: submission.id };
+  } catch (error) {
+    return { ok: false, message: error instanceof ScreenshotOCRError ? error.message : "The screenshot draft could not be created." };
+  }
+}
+
+export async function processScreenshotEvidenceAction(evidenceId: string): Promise<{ ok: boolean; message: string; validation?: Awaited<ReturnType<typeof processScreenshotEvidence>> }> {
+  await requireActiveUser("/paired-testing-demo/assignments");
+  try {
+    const validation = await processScreenshotEvidence(evidenceId);
+    revalidatePath("/paired-testing-demo/assignments");
+    return { ok: true, message: validation.serviceValidation === "matched" ? "Required service verified." : validation.serviceValidation === "mismatched" ? "The selected service does not match this assignment." : "The selected service could not be automatically verified.", validation };
+  } catch (error) {
+    return { ok: false, message: error instanceof ScreenshotOCRError ? error.message : "Screenshot OCR processing failed." };
   }
 }
 

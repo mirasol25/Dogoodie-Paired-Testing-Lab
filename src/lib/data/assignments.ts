@@ -80,17 +80,6 @@ export interface AssignmentOperationalSummary {
   pair: { id: string; pairCode: string; technicalStatus: string; evidenceStatus: string } | null;
 }
 
-export async function reopenSubmission(submissionId: string, reason: string): Promise<SubmissionRow> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("admin_reopen_submission", {
-    p_submission_id: submissionId,
-    p_reason: reason,
-  });
-  if (error) throw new AssignmentDataError(error.message || "The submission could not be reopened.");
-  if (!data) throw new AssignmentDataError("The reopened submission was not returned.");
-  return data;
-}
-
 export async function cancelAssignment(assignmentId: string, reason: string): Promise<AssignmentRow> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("cancel_assignment", { p_assignment_id: assignmentId, p_reason: reason });

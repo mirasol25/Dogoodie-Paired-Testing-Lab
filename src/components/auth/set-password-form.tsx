@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const initialState: SetPasswordState = {};
 
@@ -26,6 +27,7 @@ export function SetPasswordForm() {
   return (
     <form action={action} className="space-y-5" noValidate>
       {state.message ? <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert> : null}
+      <div className="space-y-2"><Label htmlFor="testerCountryCode">Tester location</Label><Select name="testerCountryCode" required><SelectTrigger id="testerCountryCode" aria-invalid={Boolean(state.fieldErrors?.testerCountryCode)}><SelectValue placeholder="Select location" /></SelectTrigger><SelectContent><SelectItem value="PH">PH (Philippines)</SelectItem><SelectItem value="US">US (United States)</SelectItem></SelectContent></Select>{state.fieldErrors?.testerCountryCode ? <p className="text-xs text-destructive">{state.fieldErrors.testerCountryCode[0]}</p> : null}</div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required aria-invalid={Boolean(state.fieldErrors?.password)} />

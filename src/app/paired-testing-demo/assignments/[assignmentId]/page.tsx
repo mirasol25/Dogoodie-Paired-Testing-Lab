@@ -25,5 +25,5 @@ export default async function AssignmentDetailsPage({ params }: { params: Promis
   ]);
   const evidence = await getOwnSubmissionEvidence(submission?.id ?? null, identity.user.id);
   const operations = canManage ? await getAssignmentOperationalSummary(assignment.id) : null;
-  return <AssignmentDetails study={study} assignment={assignment} submission={submission} technicalProfile={technicalProfile} evidence={evidence} currentUserId={identity.user.id} canManage={canManage} isAdmin={identity.profile.role === "admin"} operations={operations} />;
+  return <AssignmentDetails study={study} assignment={assignment} submission={submission} technicalProfile={technicalProfile} evidence={evidence} currentUserId={identity.user.id} canManage={canManage} operations={operations} />;
 }

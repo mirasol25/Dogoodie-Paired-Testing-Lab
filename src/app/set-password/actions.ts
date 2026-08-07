@@ -8,7 +8,7 @@ import { setPasswordSchema } from "@/lib/validation/account-schemas";
 
 export interface SetPasswordState {
   message?: string;
-  fieldErrors?: { password?: string[]; confirmPassword?: string[] };
+  fieldErrors?: { password?: string[]; confirmPassword?: string[]; testerCountryCode?: string[] };
 }
 
 export async function setPasswordAction(
@@ -18,6 +18,7 @@ export async function setPasswordAction(
   const parsed = setPasswordSchema.safeParse({
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
+    testerCountryCode: formData.get("testerCountryCode"),
   });
   if (!parsed.success) {
     const errors = parsed.error.flatten().fieldErrors;
@@ -48,7 +49,7 @@ export async function setPasswordAction(
 
   await admin
     .from("profiles")
-    .update({ account_status: "active" })
+    .update({ account_status: "active", tester_country_code: parsed.data.testerCountryCode })
     .eq("id", user.id)
     .eq("account_status", "pending");
 

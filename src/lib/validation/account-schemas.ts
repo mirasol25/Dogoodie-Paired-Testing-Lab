@@ -17,6 +17,7 @@ export const inviteAccountSchema = z.object({
 export const setPasswordSchema = z.object({
   password: z.string().min(12, "Use at least 12 characters.").max(128),
   confirmPassword: z.string(),
+  testerCountryCode: z.enum(["PH", "US"], "Choose your tester location."),
 }).refine((value) => value.password === value.confirmPassword, {
   message: "The passwords do not match.",
   path: ["confirmPassword"],
