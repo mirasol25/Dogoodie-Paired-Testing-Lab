@@ -33,7 +33,7 @@ export async function setPasswordAction(
   const admin = createAdminClient();
   const { data: currentProfile, error: currentProfileError } = await admin
     .from("profiles")
-    .select("account_status")
+    .select("account_status,tester_country_code")
     .eq("id", user.id)
     .maybeSingle();
   if (currentProfileError || !currentProfile) {
@@ -47,20 +47,21 @@ export async function setPasswordAction(
   const { error: passwordError } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (passwordError) return { message: passwordError.message || "The password could not be created." };
 
-  await admin
+  const { error: profileUpdateError } = await admin
     .from("profiles")
     .update({ account_status: "active", tester_country_code: parsed.data.testerCountryCode })
     .eq("id", user.id)
     .eq("account_status", "pending");
+  if (profileUpdateError) return { message: profileUpdateError.message || "Your tester location could not be saved." };
 
   // PostgREST may report an update-response error after the database has
   // committed the change. The persisted profile state is authoritative.
   const { data: finalProfile, error: finalProfileError } = await admin
     .from("profiles")
-    .select("account_status")
+    .select("account_status,tester_country_code")
     .eq("id", user.id)
     .maybeSingle();
-  if (finalProfileError || finalProfile?.account_status !== "active") {
+  if (finalProfileError || finalProfile?.account_status !== "active" || finalProfile.tester_country_code !== parsed.data.testerCountryCode) {
     return { message: "Your password was saved, but the account could not be activated. Contact an administrator." };
   }
 

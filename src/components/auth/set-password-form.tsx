@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { KeyRound, LoaderCircle } from "lucide-react";
 import { setPasswordAction, type SetPasswordState } from "@/app/set-password/actions";
@@ -24,10 +24,11 @@ function SubmitButton() {
 
 export function SetPasswordForm() {
   const [state, action] = useActionState(setPasswordAction, initialState);
+  const [testerCountryCode, setTesterCountryCode] = useState("");
   return (
     <form action={action} className="space-y-5" noValidate>
       {state.message ? <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert> : null}
-      <div className="space-y-2"><Label htmlFor="testerCountryCode">Tester location</Label><Select name="testerCountryCode" required><SelectTrigger id="testerCountryCode" aria-invalid={Boolean(state.fieldErrors?.testerCountryCode)}><SelectValue placeholder="Select location" /></SelectTrigger><SelectContent><SelectItem value="PH">PH (Philippines)</SelectItem><SelectItem value="US">US (United States)</SelectItem></SelectContent></Select>{state.fieldErrors?.testerCountryCode ? <p className="text-xs text-destructive">{state.fieldErrors.testerCountryCode[0]}</p> : null}</div>
+      <div className="space-y-2"><Label htmlFor="testerCountryCode">Tester location</Label><input type="hidden" name="testerCountryCode" value={testerCountryCode} /><Select value={testerCountryCode} onValueChange={setTesterCountryCode}><SelectTrigger id="testerCountryCode" aria-invalid={Boolean(state.fieldErrors?.testerCountryCode)}><SelectValue placeholder="Select location" /></SelectTrigger><SelectContent><SelectItem value="PH">PH (Philippines)</SelectItem><SelectItem value="US">US (United States)</SelectItem></SelectContent></Select>{state.fieldErrors?.testerCountryCode ? <p className="text-xs text-destructive">{state.fieldErrors.testerCountryCode[0]}</p> : null}</div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" autoComplete="new-password" minLength={12} required aria-invalid={Boolean(state.fieldErrors?.password)} />
