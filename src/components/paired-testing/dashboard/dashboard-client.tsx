@@ -26,7 +26,8 @@ import { Progress } from "@/components/ui/progress";
 import { MetricCard } from "@/components/paired-testing/shared/metric-card";
 import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
-import type { Study } from "@/lib/data/studies";
+import { StudyServiceContext } from "@/components/paired-testing/shared/study-service-context";
+import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 import type { AssignmentSummary } from "@/lib/data/assignments";
 import type {
   ExpertReview,
@@ -41,17 +42,19 @@ const colors = {
   incomplete: "#76877E",
   pending: "#769688",
   accepted: "#B7FF3C",
-  flagged: "#FFB020",
+  accepted_with_exception: "#FFB020",
   rejected: "#D76C68",
 };
 
 export function DashboardClient({
   study,
+  serviceOptions,
   pairs,
   reviews,
   recentActivity,
 }: {
   study: Study;
+  serviceOptions: ProviderServiceOption[];
   assignments: AssignmentSummary[];
   pairs: MatchedPairSummary[];
   reviews: ExpertReview[];
@@ -64,14 +67,24 @@ export function DashboardClient({
   });
   const technicalCount = (status: MatchedPairSummary["technical_status"]) =>
     pairs.filter((pair) => pair.technical_status === status).length;
-  const reviewCount = (
-    status: "pending" | "accepted" | "flagged" | "rejected",
-  ) =>
-    pairs.filter(
-      (pair) => (latest.get(pair.id)?.status ?? "pending") === status,
-    ).length;
+  const reviewOutcome = (pair: MatchedPairSummary) => {
+    const review = latest.get(pair.id);
+    return review?.status === "accepted" && review.technical_exception
+      ? "accepted_with_exception"
+      : review?.status ?? "pending";
+  };
+  const reviewCount = (status: "pending" | "accepted" | "accepted_with_exception" | "rejected") => pairs.filter((pair) => reviewOutcome(pair) === status).length;
   const target = study.target_pair_count ?? 0;
-  const progress = target ? Math.min((pairs.length / target) * 100, 100) : 0;
+  const acceptedWithException = reviewCount("accepted_with_exception");
+  const rejected = reviewCount("rejected");
+  const acceptedUsablePairs = pairs.filter((pair) => {
+    const review = latest.get(pair.id);
+    return review?.status === "accepted"
+      && pair.evidence_status === "complete"
+      && (["valid", "warning"].includes(pair.technical_status) || review.technical_exception);
+  }).length;
+  const replacementNeeded = target ? Math.max(target - acceptedUsablePairs, 0) : 0;
+  const progress = target ? Math.min((acceptedUsablePairs / target) * 100, 100) : 0;
   const completeEvidence = pairs.filter(
     (pair) => pair.evidence_status === "complete",
   ).length;
@@ -95,11 +108,10 @@ export function DashboardClient({
           variances[variances.length / 2]) /
         2
     : 0;
-  const largest = variances.length ? Math.max(...variances) : 0;
-  const decidedReviews =
-    reviewCount("accepted") + reviewCount("flagged") + reviewCount("rejected");
+  const largest = variances.length ? Math.max(...variances.map(Math.abs)) : 0;
+  const decidedReviews = reviewCount("accepted") + reviewCount("accepted_with_exception") + reviewCount("rejected");
   const acceptanceRate = decidedReviews
-    ? (reviewCount("accepted") / decidedReviews) * 100
+    ? (acceptedUsablePairs / decidedReviews) * 100
     : 0;
   const validationData = (
     ["valid", "warning", "invalid", "incomplete", "pending"] as const
@@ -109,7 +121,7 @@ export function DashboardClient({
     fill: colors[status],
   }));
   const reviewData = (
-    ["accepted", "flagged", "rejected", "pending"] as const
+    ["accepted", "accepted_with_exception", "rejected", "pending"] as const
   ).map((status) => ({
     name: status,
     value: reviewCount(status),
@@ -123,7 +135,7 @@ export function DashboardClient({
     { range: ">30%", min: 30, max: Infinity },
   ].map((bucket) => ({
     range: bucket.range,
-    count: variances.filter((value) =>
+    count: variances.map(Math.abs).filter((value) =>
       bucket.min === 0 && bucket.max === 0
         ? value === 0
         : value > bucket.min && value <= bucket.max,
@@ -144,13 +156,14 @@ export function DashboardClient({
         title="Study Dashboard"
         description={`${study.name} | ${study.display_timezone} | ${study.default_currency ?? "Currency pending"}`}
       />
+      <StudyServiceContext study={study} services={serviceOptions} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Submitted pairs"
-          value={target ? `${pairs.length} / ${target}` : pairs.length}
+          label="Accepted usable pairs"
+          value={target ? `${acceptedUsablePairs} / ${target}` : acceptedUsablePairs}
           note={
             target
-              ? `${progress.toFixed(0)}% of study target`
+              ? replacementNeeded ? `${replacementNeeded} replacement pair${replacementNeeded === 1 ? "" : "s"} needed` : "Study target reached"
               : "No target configured"
           }
           icon={<Target className="size-4" />}
@@ -168,7 +181,7 @@ export function DashboardClient({
         <MetricCard
           label="Pending expert review"
           value={reviewCount("pending")}
-          note={`${reviewCount("accepted")} accepted | ${reviewCount("flagged")} flagged | ${reviewCount("rejected")} rejected`}
+          note={`${reviewCount("accepted")} accepted | ${acceptedWithException} with exception | ${reviewCount("rejected")} rejected`}
           icon={<CircleGauge className="size-4" />}
         />
         <MetricCard
@@ -180,26 +193,26 @@ export function DashboardClient({
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Average observed variance"
+          label="Average signed variance"
           value={`${average.toFixed(2)}%`}
-          note="Across pairs with recorded fares"
+          note="Positive means Tester B was higher"
         />
         <MetricCard
-          label="Median observed variance"
+          label="Median signed variance"
           value={`${median.toFixed(2)}%`}
-          note="Across pairs with recorded fares"
+          note="Positive means Tester B was higher"
         />
         <MetricCard
           label="Largest observed variance"
           value={`${largest.toFixed(2)}%`}
-          note="Highest recorded pair variance"
+          note="Largest absolute difference"
         />
         <MetricCard
           label="Review acceptance rate"
           value={`${acceptanceRate.toFixed(1)}%`}
           note={
             decidedReviews
-              ? `${reviewCount("accepted")} of ${decidedReviews} decided reviews`
+              ? `${acceptedUsablePairs} usable of ${decidedReviews} decided reviews`
               : "No review decisions yet"
           }
         />
@@ -215,10 +228,11 @@ export function DashboardClient({
                 {progress.toFixed(0)}%
               </span>
               <span className="text-xs text-muted-foreground">
-                {pairs.length} / {target || "No target"}
+                {acceptedUsablePairs} / {target || "No target"}
               </span>
             </div>
             <Progress value={progress} className="mt-5 h-2" />
+            <p className="mt-2 text-[10px] text-muted-foreground">{pairs.length} total matched pair{pairs.length === 1 ? "" : "s"} recorded | {rejected} rejected record{rejected === 1 ? "" : "s"} retained outside the usable target</p>
             <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4 text-xs">
               <div>
                 <dt className="text-muted-foreground">Testing period</dt>
@@ -236,10 +250,10 @@ export function DashboardClient({
             </dl>
           </CardContent>
         </Card>
-        <Chart title="Technical validation" data={validationData} type="pie" />
+        <Chart title="Technical validation" data={validationData} type="pie" showLegend />
         <Chart title="Expert review" data={reviewData} type="bar" />
         <Chart
-          title="Fare variance distribution"
+          title="Absolute fare variance distribution"
           data={varianceData.map((item) => ({
             name: item.range,
             value: item.count,
@@ -279,9 +293,7 @@ export function DashboardClient({
                   </p>
                 </div>
                 <StatusBadge status={pair.technical_status} />
-                <StatusBadge
-                  status={latest.get(pair.id)?.status ?? "pending"}
-                />
+                <StatusBadge status={reviewOutcome(pair)} />
               </Link>
             ))}
             {!pairs.length ? (
@@ -337,10 +349,12 @@ function Chart({
   title,
   data,
   type,
+  showLegend = false,
 }: {
   title: string;
   data: Array<{ name: string; value: number; fill: string }>;
   type: "pie" | "bar";
+  showLegend?: boolean;
 }) {
   return (
     <Card className="data-panel">
@@ -397,6 +411,7 @@ function Chart({
             )}
           </ResponsiveContainer>
         </div>
+        {showLegend ? <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-3 text-[10px] text-muted-foreground sm:grid-cols-3">{data.map((item) => <div key={item.name} className="flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ backgroundColor: item.fill }} /><span className="capitalize">{item.name}</span><strong className="ml-auto text-foreground">{item.value}</strong></div>)}</div> : null}
       </CardContent>
     </Card>
   );

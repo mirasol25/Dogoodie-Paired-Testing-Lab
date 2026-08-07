@@ -8,12 +8,10 @@ import { createInitialProtocolAction } from "@/app/paired-testing-demo/protocol/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 export function CreateProtocolDetails({ study }: { study: { id: string; name: string; studyCode: string; studyQuestion: string | null; isolatedVariable: string | null } }) {
   const router = useRouter();
   const [title, setTitle] = useState(`${study.name} Testing Protocol`);
-  const [description, setDescription] = useState("");
   const [testerAValue, setTesterAValue] = useState("");
   const [testerBValue, setTesterBValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +32,7 @@ export function CreateProtocolDetails({ study }: { study: { id: string; name: st
     }
     setError(null);
     startTransition(async () => {
-      const result = await createInitialProtocolAction({ studyId: study.id, title, description, testerAValue, testerBValue });
+      const result = await createInitialProtocolAction({ studyId: study.id, title, testerAValue, testerBValue });
       if (result.ok) {
         toast.success(result.message);
         router.push("/paired-testing-demo/protocol?step=conditions");
@@ -54,7 +52,6 @@ export function CreateProtocolDetails({ study }: { study: { id: string; name: st
         <div className="space-y-2 md:col-span-2"><Label htmlFor="protocol-title">Protocol title</Label><Input id="protocol-title" value={title} onChange={(event) => { setTitle(event.target.value); setError(null); }} aria-invalid={Boolean(error)} /></div>
         <div className="space-y-2"><Label>Protocol code</Label><Input value={`${study.studyCode}-P001`} disabled className="mono" /></div>
         <div className="space-y-2"><Label>Version</Label><Input value="v1.0" disabled className="mono" /></div>
-        <div className="space-y-2 md:col-span-2"><Label htmlFor="protocol-description">Description</Label><Textarea id="protocol-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
       </div>
       <div className="grid gap-4 border-l-2 border-primary pl-4 md:grid-cols-2"><div><p className="text-xs text-muted-foreground">Study question</p><p className="mt-2 text-sm leading-6">{study.studyQuestion}</p></div><div><p className="text-xs text-muted-foreground">Isolated variable</p><p className="mt-2 text-sm leading-6">{study.isolatedVariable}</p></div></div>
       <div className="space-y-3"><div><h3 className="text-sm font-semibold">Paired isolated-variable values</h3><p className="mt-1 text-xs text-muted-foreground">This is the one intended difference between the matched testers.</p></div><div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="tester-a-value">Tester A value</Label><Input id="tester-a-value" value={testerAValue} onChange={(event) => { setTesterAValue(event.target.value); setError(null); }} placeholder="Example: Standard account" maxLength={120} /></div><div className="space-y-2"><Label htmlFor="tester-b-value">Tester B value</Label><Input id="tester-b-value" value={testerBValue} onChange={(event) => { setTesterBValue(event.target.value); setError(null); }} placeholder="Example: Subscription account" maxLength={120} /></div></div></div>

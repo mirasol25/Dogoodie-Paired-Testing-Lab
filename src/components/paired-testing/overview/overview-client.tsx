@@ -13,14 +13,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
+import { StudyServiceContext } from "@/components/paired-testing/shared/study-service-context";
 import type { ActivityLogEvent } from "@/lib/data/activity-logs";
 import type { AssignmentSummary, AssignmentTesterSummary } from "@/lib/data/assignments";
 import type { ExpertReview, MatchedPairSummary } from "@/lib/data/matched-pairs";
 import type { AppRole } from "@/lib/data/profiles";
-import type { Study } from "@/lib/data/studies";
+import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 
 interface OverviewClientProps {
   study: Study | null;
+  serviceOptions: ProviderServiceOption[];
   pairs: MatchedPairSummary[];
   reviews: ExpertReview[];
   activity: ActivityLogEvent[];
@@ -31,6 +33,7 @@ interface OverviewClientProps {
 
 export function OverviewClient({
   study,
+  serviceOptions,
   pairs,
   reviews,
   activity,
@@ -51,7 +54,7 @@ export function OverviewClient({
   }
 
   if (role === "tester") {
-    return <TesterOverview study={study} assignments={assignments} activity={activity} currentUserId={currentUserId} />;
+    return <TesterOverview study={study} serviceOptions={serviceOptions} assignments={assignments} activity={activity} currentUserId={currentUserId} />;
   }
 
   const latest = new Map<string, ExpertReview>();
@@ -60,8 +63,22 @@ export function OverviewClient({
   });
   const pending = pairs.filter((pair) => (latest.get(pair.id)?.status ?? "pending") === "pending").length;
   const valid = pairs.filter((pair) => pair.technical_status === "valid").length;
+  const acceptedUsable = pairs.filter((pair) => latest.get(pair.id)?.status === "accepted").length;
+  const acceptedWithException = pairs.filter((pair) => {
+    const review = latest.get(pair.id);
+    return review?.status === "accepted" && review.technical_exception;
+  }).length;
+  const rejected = pairs.filter((pair) => latest.get(pair.id)?.status === "rejected").length;
   const target = study.target_pair_count ?? 0;
-  const progress = target ? Math.min((pairs.length / target) * 100, 100) : 0;
+  const progress = target ? Math.min((acceptedUsable / target) * 100, 100) : 0;
+  const usablePairsNeeded = target ? Math.max(target - acceptedUsable, 0) : 0;
+  const nextAction = !target
+    ? { title: "Set a collection target", detail: "A target is required before the system can measure study completion.", href: "/paired-testing-demo/studies" }
+    : pending > 0
+      ? { title: `${pending} pair${pending === 1 ? "" : "s"} awaiting expert review`, detail: "Review decisions determine whether these observations count toward the usable-pair target.", href: "/paired-testing-demo/pairs" }
+      : usablePairsNeeded > 0
+        ? { title: `${usablePairsNeeded} usable pair${usablePairsNeeded === 1 ? "" : "s"} still needed`, detail: rejected ? `${rejected} rejected pair${rejected === 1 ? " requires" : "s require"} replacement collection.` : "Create additional paired assignments to reach the study target.", href: "/paired-testing-demo/assignments" }
+        : { title: "Collection target met", detail: "All required usable pairs are accepted. Review study completion readiness when collection is finalized.", href: "/paired-testing-demo/studies" };
   const primary = role === "expert_reviewer"
     ? { href: "/paired-testing-demo/pairs", label: "Open review queue" }
     : { href: "/paired-testing-demo/dashboard", label: "Open study dashboard" };
@@ -70,19 +87,21 @@ export function OverviewClient({
   return (
     <div className="space-y-6">
       <StudyHeader study={study} primary={primary} />
+      <StudyServiceContext study={study} services={serviceOptions} />
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(300px,.7fr)]">
         <div className="rounded-md border border-border p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><p className="text-[10px] uppercase text-primary">Active study</p><h2 className="mt-1 text-lg font-semibold">Collection and review progress</h2></div>
             <span className="text-xs text-muted-foreground">{study.display_timezone} | {study.default_currency ?? "Currency pending"}</span>
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
-            {[["Target", target || "Not set"], ["Matched", pairs.length], ["Technically valid", valid], ["Pending review", pending]].map(([label, value]) => (
+          <div className="mt-6 grid grid-cols-2 gap-5 xl:grid-cols-5">
+            {[["Accepted usable", target ? `${acceptedUsable}/${target}` : acceptedUsable], ["Technically valid", valid], ["Accepted with exception", acceptedWithException], ["Rejected", rejected], ["Total matched pairs", pairs.length]].map(([label, value]) => (
               <div key={label}><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{value}</p></div>
             ))}
           </div>
           <Progress value={progress} className="mt-5 h-1.5" />
-          <p className="mt-2 text-[10px] text-muted-foreground">{target ? `${progress.toFixed(0)}% of target collected` : "No pair target configured"}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">{target ? `${acceptedUsable} of ${target} accepted usable pairs (${progress.toFixed(0)}% of target)` : "No pair target configured"} | {pending} pending review</p>
+          <div className="mt-4 flex flex-col gap-3 rounded-md border border-primary/20 bg-primary/[0.035] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] uppercase text-primary">Next action</p><p className="mt-1 text-sm font-medium">{nextAction.title}</p><p className="mt-1 text-xs text-muted-foreground">{nextAction.detail}</p></div><Button asChild variant="outline" size="sm" className="shrink-0"><Link href={nextAction.href}>Open<ArrowRight className="size-3.5" /></Link></Button></div>
         </div>
         <RecentActivity activity={recent ? [recent] : []} study={study} showLog />
       </section>
@@ -101,7 +120,7 @@ export function OverviewClient({
   );
 }
 
-function TesterOverview({ study, assignments, activity, currentUserId }: Pick<OverviewClientProps, "study" | "assignments" | "activity" | "currentUserId"> & { study: Study }) {
+function TesterOverview({ study, serviceOptions, assignments, activity, currentUserId }: Pick<OverviewClientProps, "study" | "serviceOptions" | "assignments" | "activity" | "currentUserId"> & { study: Study }) {
   const ownAssignments = assignments
     .map((assignment) => ({ assignment, tester: assignment.testers.find((tester) => tester.userId === currentUserId) }))
     .filter((item): item is { assignment: AssignmentSummary; tester: AssignmentTesterSummary } => Boolean(item.tester))
@@ -121,6 +140,7 @@ function TesterOverview({ study, assignments, activity, currentUserId }: Pick<Ov
           <Button asChild><Link href="/paired-testing-demo/assignments">All assignments <ArrowRight className="size-4" /></Link></Button>
         </div>
       </section>
+      <StudyServiceContext study={study} services={serviceOptions} />
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(310px,.55fr)]">
         <NextSession study={study} item={next} activeCount={activeCount} totalCount={ownAssignments.length} />
@@ -150,7 +170,7 @@ function TesterOverview({ study, assignments, activity, currentUserId }: Pick<Ov
 }
 
 function StudyHeader({ study, primary }: { study: Study; primary: { href: string; label: string } }) {
-  return <section className="border-y border-border py-8 sm:py-10"><div className="max-w-4xl"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={study.status} /><span className="mono text-[10px] text-muted-foreground">{study.study_code}</span></div><h1 className="mt-4 text-3xl font-semibold sm:text-4xl">{study.name}</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">{study.description || "Protocol-led paired testing, technical validation, expert review, and evidence organization."}</p><div className="mt-6 flex flex-wrap gap-2"><Button asChild><Link href={primary.href}>{primary.label}<ArrowRight className="size-4" /></Link></Button><Button asChild variant="outline"><Link href="/paired-testing-demo/protocol">View protocol</Link></Button></div></div></section>;
+  return <section className="border-y border-border py-8 sm:py-10"><div className="max-w-4xl"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={study.status} /><span className="mono text-[10px] text-muted-foreground">{study.study_code}</span></div><h1 className="mt-4 text-3xl font-semibold sm:text-4xl">{study.name}</h1><p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">{study.study_question || "Protocol-led paired testing, technical validation, expert review, and evidence organization."}</p><div className="mt-6 flex flex-wrap gap-2"><Button asChild><Link href={primary.href}>{primary.label}<ArrowRight className="size-4" /></Link></Button><Button asChild variant="outline"><Link href="/paired-testing-demo/protocol">View protocol</Link></Button></div></div></section>;
 }
 
 function NextSession({ study, item, activeCount, totalCount }: { study: Study; item: { assignment: AssignmentSummary; tester: AssignmentTesterSummary } | undefined; activeCount: number; totalCount: number }) {

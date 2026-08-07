@@ -5,6 +5,7 @@ import { canManageAssignments } from "@/lib/auth/assignment-permissions";
 import { requireRole } from "@/lib/auth/server";
 import { getActiveStudy } from "@/lib/data/active-study";
 import { expireOverdueAssignments, getAssignmentSetupOptions, listStudyAssignments } from "@/lib/data/assignments";
+import { getStudyCollectionCapacity } from "@/lib/data/collection-capacity";
 import { listStudyMembers } from "@/lib/data/study-members";
 
 export default async function AssignmentsPage() {
@@ -27,11 +28,12 @@ export default async function AssignmentsPage() {
 
   const canManage = canManageAssignments(identity.profile.role);
   if (canManage && ["active", "paused"].includes(study.status)) await expireOverdueAssignments(study.id);
-  const [assignments, setupOptions, members] = await Promise.all([
+  const [assignments, setupOptions, members, capacity] = await Promise.all([
     listStudyAssignments(study.id),
     getAssignmentSetupOptions(study.id, study.configuration),
     canManage ? listStudyMembers(study.id) : Promise.resolve([]),
+    getStudyCollectionCapacity(study.id),
   ]);
   const testerOptions = members.filter((member) => member.study_role === "tester" && member.membership_status === "active").map((member) => ({ id: member.user_id, displayName: member.display_name?.trim() || member.email, email: member.email }));
-  return <AssignmentsClient study={study} assignments={assignments} setupOptions={setupOptions} testerOptions={testerOptions} canManage={canManage} />;
+  return <AssignmentsClient study={study} assignments={assignments} setupOptions={setupOptions} testerOptions={testerOptions} canManage={canManage} capacity={capacity} />;
 }

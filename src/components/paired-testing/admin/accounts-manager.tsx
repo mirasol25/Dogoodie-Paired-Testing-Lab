@@ -167,14 +167,19 @@ export function AccountsManager({
   invitationsConfigured: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<AppRole | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<AccountStatus | "all">("all");
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return accounts;
     return accounts.filter((account) =>
-      account.email.toLowerCase().includes(normalized)
-      || account.displayName?.toLowerCase().includes(normalized)
-      || roleLabels[account.role].toLowerCase().includes(normalized));
-  }, [accounts, query]);
+      (roleFilter === "all" || account.role === roleFilter)
+      && (statusFilter === "all" || account.accountStatus === statusFilter)
+      && (!normalized
+        || account.email.toLowerCase().includes(normalized)
+        || account.displayName?.toLowerCase().includes(normalized)
+        || roleLabels[account.role].toLowerCase().includes(normalized)
+        || statusLabels[account.accountStatus].toLowerCase().includes(normalized)));
+  }, [accounts, query, roleFilter, statusFilter]);
 
   return (
     <div className="space-y-4">
@@ -188,10 +193,14 @@ export function AccountsManager({
         </AlertDescription>
       </Alert>
 
-      <div className="flex flex-col gap-3 border-y border-border/70 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-sm">
+      <div className="flex flex-col gap-3 border-y border-border/70 py-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_180px_150px] xl:max-w-2xl">
+          <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search accounts" className="pl-9" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, role, or status" className="pl-9" />
+          </div>
+          <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as AppRole | "all")}><SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger><SelectContent><SelectItem value="all">All roles</SelectItem>{Object.entries(roleLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as AccountStatus | "all")}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-muted-foreground">{filtered.length} of {accounts.length} accounts</p>

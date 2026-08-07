@@ -105,7 +105,6 @@ function compareThresholds(before: Json, after: Json): Change[] {
 function changesBetween(active: Protocol, draft: Protocol): Change[] {
   return [
     ...compareField("Protocol details", "Title", active.title, draft.title),
-    ...compareField("Protocol details", "Description", active.description, draft.description),
     ...compareField("Isolated variable", "Tester A value", active.tester_a_value, draft.tester_a_value),
     ...compareField("Isolated variable", "Tester B value", active.tester_b_value, draft.tester_b_value),
     ...compareRules("Fixed conditions", active.fixed_controls, draft.fixed_controls),

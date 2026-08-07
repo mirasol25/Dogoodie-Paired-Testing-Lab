@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireRole } from "@/lib/auth/server";
 import { ACTIVE_STUDY_COOKIE } from "@/lib/data/active-study";
-import { createStudyWithInitialRoute, getAccessibleStudyById, StudyDataError, transitionStudyStatus } from "@/lib/data/studies";
+import { createStudyWithInitialRoute, extendStudyTestingPeriod, getAccessibleStudyById, StudyDataError, transitionStudyStatus } from "@/lib/data/studies";
 
 export interface StudyActionResult {
   ok: boolean;
@@ -55,5 +55,17 @@ export async function transitionStudyStatusAction(studyId: string, status: "acti
   } catch (error) {
     if (error instanceof StudyDataError) return { ok: false, message: error.message };
     return { ok: false, message: "The study status could not be changed." };
+  }
+}
+
+export async function extendStudyTestingPeriodAction(studyId: string, testingEndsAt: string): Promise<StudyActionResult> {
+  await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
+  try {
+    const study = await extendStudyTestingPeriod(studyId, testingEndsAt);
+    revalidatePath("/paired-testing-demo", "layout");
+    return { ok: true, message: `Testing collection is extended until ${new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: study.display_timezone }).format(new Date(study.testing_ends_at!))}.`, studyId: study.id };
+  } catch (error) {
+    if (error instanceof StudyDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The testing period could not be extended." };
   }
 }

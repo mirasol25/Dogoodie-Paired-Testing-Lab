@@ -306,6 +306,7 @@ export type Database = {
           reason: string | null
           reviewer_id: string
           status: Database["public"]["Enums"]["review_status"]
+          technical_exception: boolean
           updated_at: string
         }
         Insert: {
@@ -317,6 +318,7 @@ export type Database = {
           reason?: string | null
           reviewer_id: string
           status?: Database["public"]["Enums"]["review_status"]
+          technical_exception?: boolean
           updated_at?: string
         }
         Update: {
@@ -328,6 +330,7 @@ export type Database = {
           reason?: string | null
           reviewer_id?: string
           status?: Database["public"]["Enums"]["review_status"]
+          technical_exception?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -1224,6 +1227,7 @@ export type Database = {
           p_note: string
           p_reason: string
           p_status: Database["public"]["Enums"]["review_status"]
+          p_technical_exception?: boolean
         }
         Returns: Database["public"]["Tables"]["expert_reviews"]["Row"]
       }
@@ -1245,6 +1249,10 @@ export type Database = {
       expire_overdue_assignments: {
         Args: { p_study_id: string }
         Returns: number
+      }
+      extend_study_testing_period: {
+        Args: { p_study_id: string; p_testing_ends_at: string }
+        Returns: Database["public"]["Tables"]["studies"]["Row"]
       }
       get_study_completion_readiness: {
         Args: { p_study_id: string }
@@ -1304,6 +1312,22 @@ export type Database = {
           p_timezone: string
         }
         Returns: Database["public"]["Tables"]["assignments"]["Row"]
+      }
+      create_paired_assignment_batch: {
+        Args: {
+          p_end_time: string
+          p_instructions?: string | null
+          p_protocol_id: string
+          p_route_id: string
+          p_start_time: string
+          p_study_id: string
+          p_tester_a_service_id: string
+          p_tester_b_service_id: string
+          p_tester_pairs: Json
+          p_testing_date: string
+          p_timezone: string
+        }
+        Returns: Database["public"]["Tables"]["assignments"]["Row"][]
       }
       list_activity_log_categories: {
         Args: { p_study_id: string }

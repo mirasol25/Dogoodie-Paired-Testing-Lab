@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { ArrowLeft, CalendarClock, MapPin, RotateCcw, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarClock, ClipboardList, MapPin, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ function formatSchedule(value: string | null, timezone: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
 }
 
-export function AssignmentDetails({ study, assignment, submission, evidence, currentUserId, canManage, isAdmin, operations }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; isAdmin: boolean; operations: AssignmentOperationalSummary | null }) {
+export function AssignmentDetails({ study, assignment, submission, technicalProfile, evidence, currentUserId, canManage, isAdmin, operations }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "network_type" | "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; isAdmin: boolean; operations: AssignmentOperationalSummary | null }) {
   const timezone = timezoneOf(assignment, study.display_timezone || "UTC");
   const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
@@ -46,6 +46,11 @@ export function AssignmentDetails({ study, assignment, submission, evidence, cur
     <PageHeader eyebrow={`${study.study_code} - Assignment`} title={assignment.assignment_code} description="Controlled paired testing session" actions={<div className="flex gap-2">{canManage && !["completed", "cancelled", "expired"].includes(assignment.status) ? <CancelAssignment assignment={assignment} /> : null}<Button asChild variant="outline"><Link href="/paired-testing-demo/assignments"><ArrowLeft className="size-4" />Assignments</Link></Button></div>} />
 
     <div className="flex flex-wrap items-center gap-2 border-y border-border py-3"><StatusBadge status={assignment.status} /><Badge variant="outline">{assignment.protocolCode} v{assignment.protocolVersion}</Badge>{ownSlot ? <Badge variant="secondary">Your side: {ownSlot === "tester_a" ? "Tester A" : "Tester B"}</Badge> : null}</div>
+
+    <section className="overflow-hidden rounded-md border border-primary/35 bg-primary/[0.045]">
+      <div className="flex items-center gap-3 border-b border-primary/20 px-4 py-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10"><ClipboardList className="size-4 text-primary" /></div><div><p className="text-[10px] uppercase tracking-wider text-primary">Coordinator instructions</p><h2 className="mt-0.5 text-sm font-semibold">Read before beginning this paired session</h2></div></div>
+      <div className="px-4 py-4"><p className="max-w-4xl whitespace-pre-wrap text-sm leading-6 text-foreground">{instructions || "No additional operational instructions were added for this session. Follow the active protocol and assigned route."}</p></div>
+    </section>
 
     <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
       <div className="space-y-5"><div><p className="text-[10px] uppercase text-muted-foreground">Route</p><h2 className="mt-1.5 text-base font-semibold">{assignment.pickup_location} to {assignment.destination_location}</h2></div><div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border"><Location label="Pickup" value={assignment.pickup_location} accent="primary" /><Location label="Destination" value={assignment.destination_location} accent="amber" /></div></div>
@@ -58,10 +63,9 @@ export function AssignmentDetails({ study, assignment, submission, evidence, cur
 
     {ownTester ? <TesterReadiness assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
     {ownTester ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
-    {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} evidence={evidence} timezone={timezone} /> : null}
+    {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} timezone={timezone} /> : null}
     {ownTester?.status === "submitted" ? <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><p className="text-sm font-semibold text-primary">Observation submitted</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{assignment.status === "ready_for_validation" ? "Both tester observations are complete and ready for matching and validation." : "Your observation is locked. Waiting for the partner tester to submit."}</p></section> : null}
 
-    <section className="border-t border-border pt-5"><p className="text-[10px] uppercase text-muted-foreground">Operational instructions</p><p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-foreground">{instructions || "No additional instructions were added."}</p></section>
   </div>;
 }
 

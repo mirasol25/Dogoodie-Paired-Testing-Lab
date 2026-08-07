@@ -6,6 +6,8 @@ const tones: Record<string, { className: string; icon: typeof CheckCircle2 }> = 
   valid: { className: "border-primary/25 bg-primary/10 text-primary", icon: CheckCircle2 },
   complete: { className: "border-primary/25 bg-primary/10 text-primary", icon: CheckCircle2 },
   accepted: { className: "border-primary/25 bg-primary/10 text-primary", icon: CheckCircle2 },
+  accepted_with_exception: { className: "border-amber-400/25 bg-amber-400/10 text-amber-300", icon: AlertTriangle },
+  technical_exception: { className: "border-amber-400/25 bg-amber-400/10 text-amber-300", icon: AlertTriangle },
   warning: { className: "border-amber-400/25 bg-amber-400/10 text-amber-300", icon: AlertTriangle },
   flagged: { className: "border-amber-400/25 bg-amber-400/10 text-amber-300", icon: Flag },
   invalid: { className: "border-red-400/25 bg-red-400/10 text-red-300", icon: XCircle },

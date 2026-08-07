@@ -23,17 +23,17 @@ export interface ReviewerStudyWorkload {
   studyId: string;
   total: number;
   pending: number;
-  flagged: number;
   accepted: number;
+  acceptedWithException: number;
   rejected: number;
 }
 
 export interface StudyCompletionReadiness {
   ready: boolean;
   assignments: { total: number; completed: number; cancelled: number; expired: number; unfinished: number };
-  pairs: { total: number; technically_processed: number; missing_for_completed_assignments: number };
+  pairs: { total: number; technically_processed: number; missing_for_completed_assignments: number; accepted_usable: number; replacement_needed: number };
   evidence: { complete: number; required: number };
-  reviews: { pending: number; accepted: number; flagged: number; rejected: number };
+  reviews: { pending: number; accepted: number; accepted_with_exception: number; flagged: number; rejected: number };
   blockers: string[];
 }
 
@@ -52,19 +52,19 @@ export async function listReviewerStudyWorkloads(studyIds: string[], reviewerId:
   if (pairError) throw new StudyDataError("Reviewer workloads could not be loaded.", "DATABASE");
   const pairIds = pairs.map((pair) => pair.id);
   const reviews = pairIds.length
-    ? await supabase.from("expert_reviews").select("matched_pair_id,status").eq("reviewer_id", reviewerId).in("matched_pair_id", pairIds)
+    ? await supabase.from("expert_reviews").select("matched_pair_id,status,technical_exception").eq("reviewer_id", reviewerId).in("matched_pair_id", pairIds)
     : { data: [], error: null };
   if (reviews.error) throw new StudyDataError("Reviewer decisions could not be loaded.", "DATABASE");
-  const statusByPair = new Map(reviews.data.map((review) => [review.matched_pair_id, review.status]));
+  const reviewByPair = new Map(reviews.data.map((review) => [review.matched_pair_id, review]));
   return studyIds.map((studyId) => {
     const studyPairs = pairs.filter((pair) => pair.study_id === studyId);
     return {
       studyId,
       total: studyPairs.length,
-      pending: studyPairs.filter((pair) => !statusByPair.has(pair.id) || statusByPair.get(pair.id) === "pending").length,
-      flagged: studyPairs.filter((pair) => statusByPair.get(pair.id) === "flagged").length,
-      accepted: studyPairs.filter((pair) => statusByPair.get(pair.id) === "accepted").length,
-      rejected: studyPairs.filter((pair) => statusByPair.get(pair.id) === "rejected").length,
+      pending: studyPairs.filter((pair) => !reviewByPair.has(pair.id) || reviewByPair.get(pair.id)?.status === "pending").length,
+      accepted: studyPairs.filter((pair) => reviewByPair.get(pair.id)?.status === "accepted" && !reviewByPair.get(pair.id)?.technical_exception).length,
+      acceptedWithException: studyPairs.filter((pair) => reviewByPair.get(pair.id)?.status === "accepted" && reviewByPair.get(pair.id)?.technical_exception).length,
+      rejected: studyPairs.filter((pair) => reviewByPair.get(pair.id)?.status === "rejected").length,
     };
   });
 }
@@ -114,6 +114,17 @@ export async function transitionStudyStatus(
   if (error) {
     if (error.code === "42501") throw new StudyDataError(error.message || "You cannot change this study status.", "FORBIDDEN");
     throw new StudyDataError(error.message || "The study status could not be changed.", "VALIDATION");
+  }
+  if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
+  return data;
+}
+
+export async function extendStudyTestingPeriod(studyId: string, testingEndsAt: string): Promise<Study> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("extend_study_testing_period", { p_study_id: studyId, p_testing_ends_at: testingEndsAt });
+  if (error) {
+    if (error.code === "42501") throw new StudyDataError(error.message || "You cannot extend this study.", "FORBIDDEN");
+    throw new StudyDataError(error.message || "The testing period could not be extended.", "VALIDATION");
   }
   if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
   return data;

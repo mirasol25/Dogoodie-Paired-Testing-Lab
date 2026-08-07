@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
-import { createAssignmentSchema, type CreateAssignmentInput } from "@/lib/validation/assignment-schemas";
+import { createAssignmentBatchSchema, createAssignmentSchema, type CreateAssignmentBatchInput, type CreateAssignmentInput } from "@/lib/validation/assignment-schemas";
+import { getStudyCollectionCapacity } from "@/lib/data/collection-capacity";
 import { submissionDraftSchema, type SubmissionDraftInput } from "@/lib/validation/submission-schemas";
 import { registerEvidenceSchema, type RegisterEvidenceInput } from "@/lib/validation/evidence-schemas";
 
@@ -129,6 +130,8 @@ export async function getAssignmentOperationalSummary(assignmentId: string): Pro
 export async function createAssignment(input: CreateAssignmentInput): Promise<AssignmentRow> {
   const parsed = createAssignmentSchema.safeParse(input);
   if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid assignment.");
+  const capacity = await getStudyCollectionCapacity(parsed.data.studyId);
+  if (!capacity.canCreate) throw new AssignmentDataError(`The study target is already covered by ${capacity.coverage} pair${capacity.coverage === 1 ? "" : "s"}. Wait for a reviewer decision or create a replacement after a rejection.`);
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("create_paired_assignment", {
     p_study_id: parsed.data.studyId,
@@ -146,6 +149,33 @@ export async function createAssignment(input: CreateAssignmentInput): Promise<As
   });
   if (error) throw new AssignmentDataError(error.message || "The assignment could not be created.");
   if (!data) throw new AssignmentDataError("The created assignment was not returned.");
+  return data;
+}
+
+export async function createAssignmentBatch(input: CreateAssignmentBatchInput): Promise<AssignmentRow[]> {
+  const parsed = createAssignmentBatchSchema.safeParse(input);
+  if (!parsed.success) throw new AssignmentDataError(parsed.error.issues[0]?.message || "Invalid assignment batch.");
+  const capacity = await getStudyCollectionCapacity(parsed.data.studyId);
+  if (!capacity.canCreate) throw new AssignmentDataError("The study target is already covered by accepted, pending-review, or active paired sessions.");
+  if (capacity.target !== null && parsed.data.testerPairs.length > capacity.assignmentsNeeded) {
+    throw new AssignmentDataError(`Only ${capacity.assignmentsNeeded} assignment ${capacity.assignmentsNeeded === 1 ? "slot" : "slots"} remain for this study target.`);
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_paired_assignment_batch", {
+    p_study_id: parsed.data.studyId,
+    p_protocol_id: parsed.data.protocolId,
+    p_route_id: parsed.data.routeId,
+    p_tester_pairs: parsed.data.testerPairs.map((pair) => ({ tester_a_id: pair.testerAId, tester_b_id: pair.testerBId })),
+    p_tester_a_service_id: parsed.data.testerAServiceId,
+    p_tester_b_service_id: parsed.data.testerBServiceId,
+    p_testing_date: parsed.data.testingDate,
+    p_start_time: parsed.data.startTime,
+    p_end_time: parsed.data.endTime,
+    p_timezone: parsed.data.timezone,
+    p_instructions: parsed.data.instructions,
+  });
+  if (error) throw new AssignmentDataError(error.message || "The assignment batch could not be created.");
+  if (!data?.length) throw new AssignmentDataError("The assignment batch was not returned.");
   return data;
 }
 
@@ -230,6 +260,20 @@ export async function getOwnAssignmentSubmission(assignmentId: string, userId: s
   const supabase = await createClient();
   const { data, error } = await supabase.from("submissions").select("*").eq("assignment_id", assignmentId).eq("user_id", userId).maybeSingle();
   if (error) throw new AssignmentDataError("The submission draft could not be loaded.");
+  return data;
+}
+
+export async function getLatestTesterTechnicalProfile(userId: string, currentAssignmentId: string): Promise<Pick<SubmissionRow, "network_type" | "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("network_type,device_type,operating_system,operating_system_version,app_version")
+    .eq("user_id", userId)
+    .neq("assignment_id", currentAssignmentId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new AssignmentDataError("Your previous technical profile could not be loaded.");
   return data;
 }
 

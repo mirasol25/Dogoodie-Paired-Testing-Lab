@@ -27,6 +27,7 @@ export interface AppShellStudy {
   name: string;
   status: "draft" | "active" | "paused" | "completed" | "archived";
   currency: string | null;
+  serviceLabel?: string | null;
   timezone?: string;
   testingStartsAt?: string | null;
   testingEndsAt?: string | null;
@@ -156,6 +157,7 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
           </div>
           <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">{activeStudy?.name ?? (user.role === "law_firm_viewer" ? "No finalized study available" : "Select or create a study")}</p>
           <p className="mt-1 text-[10px] capitalize leading-4 text-muted-foreground">{activeStudy ? `${activeStudy.status} · ${activeStudy.currency ?? "Currency pending"}` : user.role === "law_firm_viewer" ? "Completed or archived studies only" : "Study management"}</p>
+          {activeStudy?.serviceLabel ? <p className="mt-2 truncate text-[10px] font-medium text-primary" title={activeStudy.serviceLabel}>{activeStudy.serviceLabel}</p> : null}
         </Link>
         <div className={cn("flex-1 overflow-y-auto", user.role === "tester" ? "mt-8" : "mt-5")}><Navigation role={user.role} /></div>
         <div className="space-y-3 border-t border-border/70 pt-4">
@@ -176,9 +178,10 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
               <SheetContent side="left" className="w-[290px] p-4">
                 <SheetHeader className="px-0 pt-0"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
                 <Brand />
-                {user.role === "tester" ? <Link href="/paired-testing-demo/tester-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
-                {user.role === "expert_reviewer" ? <Link href="/paired-testing-demo/review-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span></Link> : null}
-                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "No finalized study available"}</span></Link> : null}
+                {["admin", "test_coordinator"].includes(user.role) ? <Link href="/paired-testing-demo/studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select or create a study"}</span>{activeStudy ? <span className="mt-1 block text-[10px] capitalize text-muted-foreground">{activeStudy.status} · {activeStudy.currency ?? "Currency pending"}</span> : <span className="mt-1 block text-[10px] text-muted-foreground">Study management</span>}{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
+                {user.role === "tester" ? <Link href="/paired-testing-demo/tester-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
+                {user.role === "expert_reviewer" ? <Link href="/paired-testing-demo/review-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
+                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "No finalized study available"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
                 <div className="mt-6"><Navigation role={user.role} /></div>
                 <div className="mt-6 border-t border-border pt-5"><AccountPanel user={user} /></div>
               </SheetContent>

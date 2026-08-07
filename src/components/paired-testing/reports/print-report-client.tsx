@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { configuredStudyServices } from "@/components/paired-testing/shared/study-service-context";
 import { demoConfig } from "@/config/paired-testing-demo.config";
-import type { Study } from "@/lib/data/studies";
+import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 import type { Protocol } from "@/lib/data/protocols";
 import type { AssignmentSummary } from "@/lib/data/assignments";
+import type { AssignmentRouteOption } from "@/lib/data/assignments";
 import { assignmentDisposition, classifyReportPairs } from "@/lib/reports/report-classification";
 import type {
   ExpertReview,
@@ -17,6 +19,8 @@ import type { EvidenceRecord } from "@/lib/data/evidence";
 
 export function PrintReportClient({
   study,
+  serviceOptions,
+  route,
   protocol,
   assignments,
   pairs,
@@ -26,6 +30,8 @@ export function PrintReportClient({
   activityTotal,
 }: {
   study: Study;
+  serviceOptions: ProviderServiceOption[];
+  route: AssignmentRouteOption | null;
   protocol: Protocol | null;
   assignments: AssignmentSummary[];
   pairs: MatchedPairSummary[];
@@ -38,7 +44,11 @@ export function PrintReportClient({
   const latest = classification.latest;
   const accepted = classification.included;
   const excluded = classification.excluded;
-  const flagged = classification.flagged;
+  const acceptedWithException = accepted.filter((pair) => latest.get(pair.id)?.technical_exception).length;
+  const acceptedNormally = accepted.length - acceptedWithException;
+  const rejected = pairs.filter((pair) => latest.get(pair.id)?.status === "rejected").length;
+  const serviceLabel = configuredStudyServices(study, serviceOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ") || "Not configured";
+  const reportStage = ["completed", "archived"].includes(study.status) ? "Final descriptive report" : "Interim descriptive report";
   const disposition = assignmentDisposition(assignments);
   const evidenceComplete = pairs.filter(
     (pair) => pair.evidence_status === "complete",
@@ -46,8 +56,19 @@ export function PrintReportClient({
   const packageId = `${study.study_code}-PKG-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`;
   const failedRequiredChecks = validationResults.filter((result) => result.requirement_level === "required" && result.status === "fail").length;
   const warningChecks = validationResults.filter((result) => result.status === "warning").length;
+  const evidenceMetadataAvailable = evidence.filter((file) => file.metadata && typeof file.metadata === "object" && !Array.isArray(file.metadata)).length;
+  const includedVariances = accepted.map((pair) => pair.percentage_fare_difference).filter((value): value is number => value !== null);
+  const meanVariance = includedVariances.length ? includedVariances.reduce((total, value) => total + value, 0) / includedVariances.length : null;
+  const sortedVariances = [...includedVariances].sort((a, b) => a - b);
+  const medianVariance = sortedVariances.length ? (sortedVariances.length % 2 ? sortedVariances[Math.floor(sortedVariances.length / 2)] : (sortedVariances[(sortedVariances.length / 2) - 1] + sortedVariances[sortedVariances.length / 2]) / 2) : null;
+  const technicallyValid = pairs.filter((pair) => pair.technical_status === "valid").length;
+  const technicalValidationRate = pairs.length ? (technicallyValid / pairs.length) * 100 : null;
+  const decidedReviews = accepted.length + rejected;
+  const reviewAcceptanceRate = decidedReviews ? (accepted.length / decidedReviews) * 100 : null;
+  const largestIncludedPair = accepted.filter((pair) => pair.absolute_fare_difference !== null).sort((a, b) => Math.abs(b.absolute_fare_difference ?? 0) - Math.abs(a.absolute_fare_difference ?? 0))[0] ?? null;
+  const requestTimeThreshold = validationResults.find((result) => result.rule_code === "request_time_gap")?.threshold_configuration ?? null;
+  const locationThreshold = validationResults.find((result) => result.rule_code === "location_distance_gap" || result.rule_code === "tester_a_pickup_proximity")?.threshold_configuration ?? null;
   const nextReviewQuestions = [
-    flagged.length ? `What follow-up resolves the ${flagged.length} flagged pair${flagged.length === 1 ? "" : "s"}?` : null,
     excluded.length ? `Are the documented reasons sufficient for excluding ${excluded.length} pair${excluded.length === 1 ? "" : "s"}?` : null,
     classification.pending.length ? `When will expert review be completed for ${classification.pending.length} pending pair${classification.pending.length === 1 ? "" : "s"}?` : null,
     "Do repeated observations support the descriptive pattern after alternative explanations are considered?",
@@ -82,7 +103,7 @@ export function PrintReportClient({
             </p>
             <h1 className="mt-4 text-3xl font-semibold">{study.name}</h1>
             <p className="mt-2 text-sm text-[#587065]">
-              Neutral analytical memo and supporting appendices
+              {reportStage} and supporting appendices
             </p>
           </div>
           <div className="text-right">
@@ -94,6 +115,7 @@ export function PrintReportClient({
         </div>
       </header>
       <Section title="Scope and limitation">
+        <p className="mb-3 border border-[#b9c1bd] bg-[#f5f7f5] px-3 py-2 text-[9px] font-semibold uppercase text-[#355346]">{reportStage}. Generated {new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: study.display_timezone }).format(new Date())} ({study.display_timezone}).</p>
         <p className="leading-6">
           This report presents descriptive results from the selected
           paired-testing study. Validation rules, evidence requirements, and
@@ -105,10 +127,14 @@ export function PrintReportClient({
       <Section title="1. Executive summary">
         <div className="grid grid-cols-4 gap-2">
           {[
-            ["Matched pairs", pairs.length],
-            ["Included results", accepted.length],
-            ["Flagged", flagged.length],
+            ["Target usable pairs", study.target_pair_count ? `${accepted.length}/${study.target_pair_count}` : "Not set"],
+            ["Accepted usable pairs", accepted.length],
+            ["Accepted normally", acceptedNormally],
+            ["Accepted with exception", acceptedWithException],
+            ["Rejected pairs", rejected],
+            ["Pending review", classification.pending.length],
             ["Evidence complete", `${evidenceComplete}/${pairs.length}`],
+            ["Metadata available", `${evidenceMetadataAvailable}/${evidence.length}`],
           ].map(([label, value]) => (
             <PrintMetric
               key={label}
@@ -117,8 +143,9 @@ export function PrintReportClient({
             />
           ))}
         </div>
+        <p className="mt-4 leading-6">{acceptedNormally} pair{acceptedNormally === 1 ? "" : "s"} were accepted without an exception, {acceptedWithException} pair{acceptedWithException === 1 ? "" : "s"} were accepted with a documented technical exception, {excluded.length} pair{excluded.length === 1 ? "" : "s"} were rejected, and {classification.pending.length} pair{classification.pending.length === 1 ? "" : "s"} remain pending review. {meanVariance === null ? "No included pair has a recorded fare variance." : `Across included pairs with recorded fares, the mean directional variance was ${meanVariance.toFixed(2)}% and the median was ${medianVariance?.toFixed(2)}%. Positive values mean Tester B received the higher fare.`}</p>
       </Section>
-      <Section title="2. Method summary">
+      <Section title="2. Study design">
         <p className="leading-6">Two assigned testers collected contemporaneous fare observations for the locked route, provider or service tier, testing window, and protocol conditions. The system compared the submissions using the active protocol, retained required evidence and system metadata, and separated deterministic technical validation from expert review.</p>
       </Section>
       <Section title="3. Study context">
@@ -127,6 +154,10 @@ export function PrintReportClient({
             ["Study code", study.study_code],
             ["Status", study.status],
             ["Currency", study.default_currency ?? "Not set"],
+            ["Testing service", serviceLabel],
+            ["Comparison mode", study.study_type === "cross_platform_comparison" ? "Cross-platform comparison" : "Within-platform comparison"],
+            ["Pickup", route?.pickup ?? "Not recorded"],
+            ["Destination", route?.destination ?? "Not recorded"],
             ["Timezone", study.display_timezone],
             [
               "Testing period",
@@ -150,17 +181,32 @@ export function PrintReportClient({
           ))}
         </dl>
       </Section>
-      <Section title="4. Observations and technical conformance">
-        <div className="grid grid-cols-4 gap-2"><PrintMetric label="Observations" value={String(pairs.length)} /><PrintMetric label="Required failures" value={String(failedRequiredChecks)} /><PrintMetric label="Warnings" value={String(warningChecks)} /><PrintMetric label="Evidence records" value={String(evidence.length)} /></div>
+      <Section title="4. Intended tester difference">
+        <p className="leading-6">The isolated variable is the only intended difference between the paired testers. All other fixed controls must remain matched under the active protocol.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3"><PrintMetric label="Tester A condition" value={protocol?.tester_a_value ?? "Not recorded"} /><PrintMetric label="Tester B condition" value={protocol?.tester_b_value ?? "Not recorded"} /></div>
+      </Section>
+      <Section title="5. Protocol controls">
+        <ul className="space-y-1 leading-5"><li>Matched controls: route, provider and ride tier, currency, pickup, destination, and protocol conditions.</li><li>Request-time threshold: {formatThreshold(requestTimeThreshold)}.</li><li>Location threshold: {formatThreshold(locationThreshold)}.</li><li>Required evidence: quote screenshot, screen recording, and system-generated metadata.</li></ul>
+      </Section>
+      <Section title="6. Descriptive fare results">
+        <div className="grid grid-cols-3 gap-2"><PrintMetric label="Average signed variance" value={meanVariance === null ? "-" : `${meanVariance.toFixed(2)}%`} /><PrintMetric label="Median signed variance" value={medianVariance === null ? "-" : `${medianVariance.toFixed(2)}%`} /><PrintMetric label="Largest absolute variance" value={largestIncludedPair?.percentage_fare_difference === null || !largestIncludedPair ? "-" : `${Math.abs(largestIncludedPair.percentage_fare_difference).toFixed(2)}%`} /><PrintMetric label="Technical validation rate" value={technicalValidationRate === null ? "-" : `${technicalValidationRate.toFixed(1)}%`} /><PrintMetric label="Review acceptance rate" value={reviewAcceptanceRate === null ? "-" : `${reviewAcceptanceRate.toFixed(1)}%`} /><PrintMetric label="Matched pairs / submissions" value={`${pairs.length} / ${pairs.length * 2}`} /></div>
+        <p className="mt-3 text-[#587065]">Positive signed variance means Tester B received the higher fare. These are descriptive results only.</p>
+      </Section>
+      <Section title="7. Largest included variance">
+        {largestIncludedPair ? <div className="grid grid-cols-3 gap-2"><PrintMetric label="Pair" value={largestIncludedPair.pair_code} /><PrintMetric label="Tester A quote" value={formatFare(largestIncludedPair.submissionA.displayed_fare, largestIncludedPair.submissionA.currency)} /><PrintMetric label="Tester B quote" value={formatFare(largestIncludedPair.submissionB.displayed_fare, largestIncludedPair.submissionB.currency)} /><PrintMetric label="Variance" value={formatPercent(largestIncludedPair.percentage_fare_difference)} /><PrintMetric label="Timestamp gap" value={largestIncludedPair.timestamp_difference_seconds === null ? "-" : `${largestIncludedPair.timestamp_difference_seconds.toFixed(1)} seconds`} /><PrintMetric label="Technical / review" value={`${largestIncludedPair.technical_status} / ${reviewOutcome(latest.get(largestIncludedPair.id))}`} /></div> : <p>No included pair has a recorded fare difference.</p>}
+        <p className="mt-3 text-[#587065]">This pair is selected mechanically as the included pair with the largest absolute recorded fare difference. It is not evidence of causation, discrimination, or liability.</p>
+      </Section>
+      <Section title="8. Paired submissions and technical conformance">
+        <div className="grid grid-cols-4 gap-2"><PrintMetric label="Matched pairs" value={String(pairs.length)} /><PrintMetric label="Tester submissions" value={String(pairs.length * 2)} /><PrintMetric label="Required failures" value={String(failedRequiredChecks)} /><PrintMetric label="Warnings" value={String(warningChecks)} /></div>
         <PrintDistributions pairs={pairs} reviews={reviews} />
       </Section>
-      <Section title="5. Expert-review status">
-        <p className="leading-6">{accepted.length} included, {flagged.length} flagged for follow-up, {excluded.length} excluded, and {classification.pending.length} pending expert review. Technical findings inform these decisions but do not replace reviewer judgment.</p>
+      <Section title="9. Expert-review status">
+        <p className="leading-6">A technically invalid or incomplete pair is only included when an expert reviewer accepts it with a documented technical exception and its required evidence is complete. {accepted.length} usable pair{accepted.length === 1 ? "" : "s"} are included: {acceptedNormally} accepted without exception and {acceptedWithException} accepted with a documented technical exception. {excluded.length} pair{excluded.length === 1 ? "" : "s"} are rejected and {classification.pending.length} remain pending review. Technical findings inform these decisions but do not replace reviewer judgment.</p>
       </Section>
-      <Section title="6. Limitations">
+      <Section title="10. Limitations">
         <p className="leading-6">This memo is descriptive. A pricing difference alone does not establish unlawful discrimination. Findings require interpretation under the approved methodology, repeated observations, statistical analysis, alternative explanations, and applicable law.</p>
       </Section>
-      <Section title="7. Next-review questions">
+      <Section title="11. Next-review questions">
         <ol className="list-decimal space-y-1 pl-4">{nextReviewQuestions.map((question) => <li key={question}>{question}</li>)}</ol>
       </Section>
       <div className="mt-10 border-t-2 border-[#17251f] pt-4 print:break-before-page"><p className="text-[10px] font-bold uppercase text-[#587065]">Supporting appendices</p></div>
@@ -171,19 +217,17 @@ export function PrintReportClient({
       <Section title="B. Included pairs">
         <PairTable pairs={accepted} latest={latest} />
       </Section>
-      <Section title="C. Flagged follow-up pairs">
-        <PairTable pairs={flagged} latest={latest} />
-      </Section>
-      <Section title="D. Excluded and incomplete pairs">
+      <Section title="C. Rejected pairs">
         <PairTable pairs={excluded} latest={latest} />
       </Section>
-      <Section title="E. Reviewer decisions">
+      <Section title="D. Reviewer decisions">
         <table className="w-full text-[8px]">
           <thead>
             <tr className="bg-[#eef1ef]">
               <Head>Pair</Head>
               <Head>Status</Head>
               <Head>Reason</Head>
+              <Head>Decided</Head>
               <Head>Reviewer note</Head>
             </tr>
           </thead>
@@ -193,8 +237,9 @@ export function PrintReportClient({
               return (
                 <tr key={pair.id}>
                   <Cell>{pair.pair_code}</Cell>
-                  <Cell>{review?.status ?? "pending"}</Cell>
+                  <Cell>{reviewOutcome(review)}</Cell>
                   <Cell>{review?.reason ?? "-"}</Cell>
+                  <Cell>{review?.decided_at ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: study.display_timezone }).format(new Date(review.decided_at)) : "-"}</Cell>
                   <Cell>{review?.note ?? "-"}</Cell>
                 </tr>
               );
@@ -202,16 +247,18 @@ export function PrintReportClient({
           </tbody>
         </table>
       </Section>
-      <Section title="F. Rule-level protocol results">
-        <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Pair</Head><Head>Rule</Head><Head>Level</Head><Head>Finding</Head><Head>Result</Head></tr></thead><tbody>{validationResults.map((result) => <tr key={result.id}><Cell>{pairs.find((pair) => pair.id === result.matched_pair_id)?.pair_code ?? result.matched_pair_id}</Cell><Cell>{result.label}</Cell><Cell>{result.requirement_level}</Cell><Cell>{result.observed_difference ?? "-"}</Cell><Cell>{result.status}</Cell></tr>)}</tbody></table>
+      <Section title="E. Rule-level protocol results">
+        <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Pair</Head><Head>Rule</Head><Head>Level</Head><Head>Finding</Head><Head>Configured threshold</Head><Head>Result</Head></tr></thead><tbody>{validationResults.map((result) => <tr key={result.id}><Cell>{pairs.find((pair) => pair.id === result.matched_pair_id)?.pair_code ?? result.matched_pair_id}</Cell><Cell>{result.label}</Cell><Cell>{result.requirement_level}</Cell><Cell>{result.observed_difference ?? "-"}</Cell><Cell>{formatThreshold(result.threshold_configuration)}</Cell><Cell>{result.status}</Cell></tr>)}</tbody></table>
       </Section>
-      <Section title="G. Evidence inventory">
+      <Section title="F. Evidence inventory">
+        <p className="mb-2 text-[#587065]">{evidence.length} uploaded evidence record{evidence.length === 1 ? "" : "s"}; metadata is available for {evidenceMetadataAvailable}/{evidence.length} evidence record{evidence.length === 1 ? "" : "s"}. System metadata is stored with each evidence record rather than exported as a separate media file.</p>
         <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Evidence</Head><Head>Pair</Head><Head>Tester</Head><Head>Type</Head><Head>Integrity</Head></tr></thead><tbody>{evidence.map((file) => <tr key={file.id}><Cell>{file.evidence_code ?? file.id}</Cell><Cell>{file.pairCode ?? "Unpaired"}</Cell><Cell>{file.testerName}</Cell><Cell>{file.evidence_type}</Cell><Cell>{file.integrity_status}</Cell></tr>)}</tbody></table>
       </Section>
-      <Section title="H. Package inventory">
+      <Section title="G. Package inventory">
         <dl className="grid grid-cols-2 gap-2">
           {[
             ["Evidence records", evidence.length],
+            ["Evidence metadata available", `${evidenceMetadataAvailable}/${evidence.length}`],
             ["Activity events", activityTotal],
             ["Review records", reviews.length],
             ["Generated", new Date().toISOString()],
@@ -256,7 +303,7 @@ function PrintMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-[#b9c1bd] p-3">
       <p className="text-[8px] uppercase text-[#587065]">{label}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
+      <p className="mt-2 break-words text-xl font-semibold leading-6">{value}</p>
     </div>
   );
 }
@@ -294,20 +341,37 @@ function PairTable({
         {pairs.map((pair) => (
           <tr key={pair.id}>
             <Cell>{pair.pair_code}</Cell>
-            <Cell>{pair.submissionA.displayed_fare ?? "-"}</Cell>
-            <Cell>{pair.submissionB.displayed_fare ?? "-"}</Cell>
+            <Cell>{formatFare(pair.submissionA.displayed_fare, pair.submissionA.currency)}</Cell>
+            <Cell>{formatFare(pair.submissionB.displayed_fare, pair.submissionB.currency)}</Cell>
             <Cell>
               {pair.percentage_fare_difference === null
                 ? "-"
                 : `${pair.percentage_fare_difference.toFixed(2)}%`}
             </Cell>
             <Cell>{pair.technical_status}</Cell>
-            <Cell>{latest.get(pair.id)?.status ?? "pending"}</Cell>
+            <Cell>{reviewOutcome(latest.get(pair.id))}</Cell>
           </tr>
         ))}
       </tbody>
     </table>
   );
+}
+function reviewOutcome(review: ExpertReview | undefined) {
+  if (!review) return "Pending";
+  if (review.status === "accepted" && review.technical_exception) return "Accepted with technical exception";
+  return review.status.charAt(0).toUpperCase() + review.status.slice(1);
+}
+function formatFare(value: number | null, currency: string | null) {
+  return value === null ? "-" : `${currency ?? ""} ${value.toFixed(2)}`.trim();
+}
+function formatPercent(value: number | null) {
+  return value === null ? "-" : `${value.toFixed(2)}%`;
+}
+function formatThreshold(value: MatchedPairValidationResult["threshold_configuration"]) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "Protocol requirement";
+  const entries = Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item));
+  if (!entries.length) return "Protocol requirement";
+  return entries.map(([key, item]) => `${key.replaceAll("_", " ")}: ${String(item)}`).join("; ");
 }
 function Head({ children }: { children: React.ReactNode }) {
   return (

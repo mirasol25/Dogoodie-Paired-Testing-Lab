@@ -11,6 +11,6 @@ export default async function ReviewStudiesPage() {
   const [studies, activeStudy] = await Promise.all([listAccessibleStudies(), getActiveStudy()]);
   const workloads = await listReviewerStudyWorkloads(studies.map((study) => study.id), identity.user.id);
   const workloadByStudy = new Map(workloads.map((workload) => [workload.studyId, workload]));
-  const rows = studies.map((study) => ({ study, workload: workloadByStudy.get(study.id) ?? { studyId: study.id, total: 0, pending: 0, flagged: 0, accepted: 0, rejected: 0 } }));
+  const rows = studies.map((study) => ({ study, workload: workloadByStudy.get(study.id) ?? { studyId: study.id, total: 0, pending: 0, accepted: 0, acceptedWithException: 0, rejected: 0 } }));
   return <div className="space-y-6"><PageHeader eyebrow="Reviewer workspace" title="Review Studies" description="Select an assigned study and continue its matched-pair review queue." /><ReviewStudiesClient rows={rows} activeStudyId={activeStudy?.id ?? null} /></div>;
 }

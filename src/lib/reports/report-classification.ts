@@ -10,17 +10,16 @@ export function latestReviews(reviews: ExpertReview[]) {
 export function classifyReportPairs(pairs: MatchedPairSummary[], reviews: ExpertReview[]) {
   const latest = latestReviews(reviews);
   const included: MatchedPairSummary[] = [];
-  const flagged: MatchedPairSummary[] = [];
   const excluded: MatchedPairSummary[] = [];
   const pending: MatchedPairSummary[] = [];
   pairs.forEach((pair) => {
     const review = latest.get(pair.id)?.status ?? "pending";
     if (review === "pending") return pending.push(pair);
-    if (review === "flagged") return flagged.push(pair);
-    if (review === "accepted" && ["valid", "warning"].includes(pair.technical_status) && pair.evidence_status === "complete") return included.push(pair);
+    const latestReview = latest.get(pair.id);
+    if (review === "accepted" && pair.evidence_status === "complete" && (["valid", "warning"].includes(pair.technical_status) || latestReview?.technical_exception)) return included.push(pair);
     excluded.push(pair);
   });
-  return { latest, included, flagged, excluded, pending };
+  return { latest, included, excluded, pending };
 }
 
 export function pairExclusionReason(pair: MatchedPairSummary, latest: Map<string, ExpertReview>) {

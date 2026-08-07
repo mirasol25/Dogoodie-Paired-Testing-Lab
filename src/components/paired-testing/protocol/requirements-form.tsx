@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Camera, Check, LoaderCircle, Save } from "lucide-react";
+import { Camera, Check, FileJson, Film, LoaderCircle, Save } from "lucide-react";
 import { toast } from "sonner";
 import { saveProtocolRequirementsAction } from "@/app/paired-testing-demo/protocol/actions";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
 import type { Json } from "@/types/database.types";
 
-type EvidenceCode = "screen_recording" | "gps_coordinates";
 type ObservationCode = "estimated_arrival_time" | "availability" | "price_breakdown" | "tester_notes" | "app_version" | "device_model" | "operating_system_family" | "network_category" | "account_age_membership";
-
-const evidenceOptions: Array<{ code: EvidenceCode; label: string }> = [
-  { code: "screen_recording", label: "Screen recording" },
-  { code: "gps_coordinates", label: "Observed GPS coordinates" },
-];
 
 const requiredObservationFields = [
   "Provider", "Normalized service category", "Displayed price", "Currency", "Pickup and destination",
@@ -46,21 +40,14 @@ function observationConfiguration(configuration: Json): Json {
 
 export function RequirementsForm({ studyId, protocolId, evidenceRequirements, validationConfiguration, fixedControls }: { studyId: string; protocolId: string; evidenceRequirements: Json; validationConfiguration: Json; fixedControls: Json }) {
   const forcedTechnical = new Set(codesFromArray(fixedControls).filter((code) => observationOptions.some((option) => option.code === code)) as ObservationCode[]);
-  const existingEvidence = codesFromArray(evidenceRequirements).filter((code) => evidenceOptions.some((option) => option.code === code)) as EvidenceCode[];
   const existingObservations = codesFromArray(observationConfiguration(validationConfiguration)).filter((code) => observationOptions.some((option) => option.code === code) && !forcedTechnical.has(code as ObservationCode)) as ObservationCode[];
-  const initiallyConfigured = codesFromArray(evidenceRequirements).includes("screenshot") && Array.isArray(observationConfiguration(validationConfiguration));
-  const [evidence, setEvidence] = useState(existingEvidence);
+  const initiallyConfigured = codesFromArray(evidenceRequirements).includes("screenshot") && codesFromArray(evidenceRequirements).includes("screen_recording") && Array.isArray(observationConfiguration(validationConfiguration));
   const [observations, setObservations] = useState(existingObservations);
-  const [savedEvidence, setSavedEvidence] = useState(existingEvidence);
   const [savedObservations, setSavedObservations] = useState(existingObservations);
   const [configured, setConfigured] = useState(initiallyConfigured);
   const [pending, startTransition] = useTransition();
   const navigation = useProtocolDraftNavigation();
-  const dirty = !configured || [...evidence].sort().join(",") !== [...savedEvidence].sort().join(",") || [...observations].sort().join(",") !== [...savedObservations].sort().join(",");
-
-  function toggleEvidence(code: EvidenceCode, checked: boolean) {
-    setEvidence((current) => checked ? [...current, code] : current.filter((item) => item !== code));
-  }
+  const dirty = !configured || [...observations].sort().join(",") !== [...savedObservations].sort().join(",");
 
   function toggleObservation(code: ObservationCode, checked: boolean) {
     setObservations((current) => checked ? [...current, code] : current.filter((item) => item !== code));
@@ -68,9 +55,8 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
 
   function save() {
     startTransition(async () => {
-      const result = await saveProtocolRequirementsAction({ studyId, protocolId, optionalEvidence: evidence, optionalObservationFields: observations });
+      const result = await saveProtocolRequirementsAction({ studyId, protocolId, optionalEvidence: [], optionalObservationFields: observations });
       if (result.ok) {
-        setSavedEvidence(evidence);
         setSavedObservations(observations);
         setConfigured(true);
         toast.success(result.message);
@@ -83,7 +69,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
     <section className="space-y-6 border-t border-border pt-6">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><h2 className="mt-1.5 text-lg font-semibold">Evidence and observation requirements</h2></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
 
-      <div className="space-y-3"><h3 className="text-sm font-semibold">Evidence</h3><div className="divide-y divide-border rounded-md border border-border"><div className="flex min-h-14 items-center gap-3 px-4 py-3"><Checkbox checked disabled /><Camera className="size-4 text-primary" /><span className="flex-1 text-sm font-medium">Quote screenshot</span><Badge variant="outline">Required</Badge></div>{evidenceOptions.map((option) => <label key={option.code} className="flex min-h-14 cursor-pointer items-center gap-3 px-4 py-3 hover:bg-secondary"><Checkbox checked={evidence.includes(option.code)} onCheckedChange={(checked) => toggleEvidence(option.code, checked === true)} /><span className="flex-1 text-sm">{option.label}</span><Badge variant="secondary">Optional</Badge></label>)}</div></div>
+      <div className="space-y-3"><div><h3 className="text-sm font-semibold">Required evidence</h3><p className="mt-1 text-xs text-muted-foreground">GPS is recorded in the tester observation and used for validation; it is not a separate evidence file.</p></div><div className="divide-y divide-border rounded-md border border-border"><EvidenceRequirement icon={Camera} label="Quote screenshot" detail="Uploaded by each tester." /><EvidenceRequirement icon={Film} label="Screen recording" detail="Uploaded by each tester." /><EvidenceRequirement icon={FileJson} label="System-generated metadata" detail="Created automatically from the uploaded files and submission record." /></div></div>
 
       <div className="space-y-3"><h3 className="text-sm font-semibold">Required observation data</h3><div className="grid gap-x-5 gap-y-2 border-y border-border py-4 sm:grid-cols-2 lg:grid-cols-3">{requiredObservationFields.map((field) => <div key={field} className="flex items-center gap-2 text-xs"><Check className="size-3.5 text-primary" /><span>{field}</span></div>)}</div></div>
 
@@ -96,4 +82,8 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
       <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>
   );
+}
+
+function EvidenceRequirement({ icon: Icon, label, detail }: { icon: typeof Camera; label: string; detail: string }) {
+  return <div className="flex min-h-14 items-center gap-3 px-4 py-3"><Checkbox checked disabled /><Icon className="size-4 text-primary" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{label}</span><span className="mt-0.5 block text-xs text-muted-foreground">{detail}</span></span><Badge variant="outline">Required</Badge></div>;
 }

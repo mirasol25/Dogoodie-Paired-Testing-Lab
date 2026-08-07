@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 import { ReportScopeAlert as DisclaimerAlert } from "@/components/paired-testing/reports/report-scope-alert";
 import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
+import { configuredStudyServices, StudyServiceContext } from "@/components/paired-testing/shared/study-service-context";
 import { downloadTextFile, rowsToCsv } from "@/lib/exports/csv-export";
-import type { Study } from "@/lib/data/studies";
+import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 import type { Protocol } from "@/lib/data/protocols";
 import type { EvidenceRecord } from "@/lib/data/evidence";
 import type {
@@ -35,6 +36,7 @@ import {
 
 type Props = {
   study: Study;
+  serviceOptions: ProviderServiceOption[];
   protocol: Protocol | null;
   assignments: AssignmentSummary[];
   pairs: MatchedPairSummary[];
@@ -48,6 +50,7 @@ type Props = {
 
 export function ReportsClient({
   study,
+  serviceOptions,
   protocol,
   assignments,
   pairs,
@@ -59,20 +62,24 @@ export function ReportsClient({
   canExport,
 }: Props) {
   const classification = classifyReportPairs(pairs, reviews);
+  const serviceLabel = configuredStudyServices(study, serviceOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
   const latestReview = classification.latest;
   const acceptedPairs = classification.included;
-  const flaggedPairs = classification.flagged;
   const excludedPairs = classification.excluded;
   const accepted = acceptedPairs.length;
-  const flagged = flaggedPairs.length;
+  const acceptedWithException = acceptedPairs.filter((pair) => latestReview.get(pair.id)?.technical_exception).length;
+  const acceptedNormally = accepted - acceptedWithException;
   const rejected = pairs.filter(
     (pair) => latestReview.get(pair.id)?.status === "rejected",
   ).length;
   const pending = classification.pending.length;
+  const reviewOutcome = (pair: MatchedPairSummary) => latestReview.get(pair.id)?.status === "accepted" && latestReview.get(pair.id)?.technical_exception ? "accepted_with_exception" : latestReview.get(pair.id)?.status ?? "pending";
   const disposition = assignmentDisposition(assignments);
   const evidenceComplete = pairs.filter(
     (pair) => pair.evidence_status === "complete",
   ).length;
+  const evidenceMetadataAvailable = evidence.filter((file) => file.metadata && typeof file.metadata === "object" && !Array.isArray(file.metadata)).length;
+  const reportStage = ["completed", "archived"].includes(study.status) ? "Final descriptive report" : "Interim descriptive report";
   const packageId = `${study.study_code}-PKG-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`;
 
   const pairCsv = (selected: MatchedPairSummary[]) =>
@@ -89,7 +96,7 @@ export function ReportsClient({
         "Directional percent of A",
         "Technical",
         "Evidence",
-        "Review",
+        "Review outcome",
       ],
       selected.map((pair) => [
         pair.pair_code,
@@ -103,7 +110,7 @@ export function ReportsClient({
         pair.percentage_fare_difference,
         pair.technical_status,
         pair.evidence_status,
-        latestReview.get(pair.id)?.status ?? "pending",
+        reviewOutcome(pair),
       ]),
     );
 
@@ -146,6 +153,7 @@ export function ReportsClient({
           [
             "Assignment",
             "Status",
+            "Technical exception",
             "Scheduled start",
             "Scheduled end",
             "Pickup",
@@ -204,6 +212,7 @@ export function ReportsClient({
             review.matched_pair_id,
             review.reviewer_id,
             review.status,
+            review.technical_exception,
             review.reason,
             review.note,
             review.decided_at,
@@ -324,7 +333,6 @@ export function ReportsClient({
               assignments: disposition,
               pairs: pairs.length,
               included: accepted,
-              flagged,
               rejected,
               excluded: excludedPairs.length,
               pending,
@@ -359,7 +367,6 @@ export function ReportsClient({
             assignments,
             pairClassification: {
               included: acceptedPairs.map((pair) => pair.id),
-              flagged: flaggedPairs.map((pair) => pair.id),
               excluded: excludedPairs.map((pair) => ({
                 id: pair.id,
                 reason: pairExclusionReason(pair, latestReview),
@@ -402,12 +409,15 @@ export function ReportsClient({
           </Button>
         }
       />
+      <StudyServiceContext study={study} services={serviceOptions} />
       <DisclaimerAlert />
+      <section className="rounded-md border border-primary/25 bg-primary/[0.035] px-4 py-3"><p className="text-[10px] uppercase text-primary">{reportStage}</p><p className="mt-1 text-sm leading-6">{study.target_pair_count ? `Study target ${accepted >= study.target_pair_count ? "met" : "not yet met"}: ${accepted} usable pair${accepted === 1 ? "" : "s"} of ${study.target_pair_count} required.` : `${accepted} usable pair${accepted === 1 ? "" : "s"} included.`} {acceptedNormally} accepted normally, {acceptedWithException} accepted with a documented technical exception, {rejected} rejected, and {pending} pending review.{serviceLabel ? ` Testing service: ${serviceLabel}.` : ""}</p></section>
+      <section className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3"><div className="bg-card px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">Isolated variable</p><p className="mt-1 text-sm font-medium">{protocol?.isolated_variable ?? study.isolated_variable ?? "Not recorded"}</p></div><div className="bg-card px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">Tester A intended condition</p><p className="mt-1 text-sm font-medium">{protocol?.tester_a_value ?? "Not recorded"}</p></div><div className="bg-card px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">Tester B intended condition</p><p className="mt-1 text-sm font-medium">{protocol?.tester_b_value ?? "Not recorded"}</p></div></section>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Matched pairs" value={pairs.length} />
-        <Metric label="Included results" value={accepted} />
-        <Metric label="Flagged follow-up" value={flagged} />
-        <Metric label="Excluded pairs" value={excludedPairs.length} />
+        <Metric label="Included usable results" value={accepted} />
+        <Metric label="Accepted with exception" value={acceptedWithException} />
+        <Metric label="Rejected pairs" value={rejected} />
         <Metric label="Pending review" value={pending} />
       </div>
       <section className="rounded-md border border-border p-4">
@@ -436,7 +446,7 @@ export function ReportsClient({
             <Output
               icon={FileSpreadsheet}
               title="Matched pair results"
-              detail={`${accepted} included, ${flagged} flagged, ${excludedPairs.length} excluded`}
+              detail={`${acceptedNormally} accepted, ${acceptedWithException} with exception, ${rejected} rejected`}
             />
             <Output
               icon={ShieldCheck}
@@ -446,7 +456,7 @@ export function ReportsClient({
             <Output
               icon={FileArchive}
               title="Evidence inventory"
-              detail={`${evidence.length} private evidence records`}
+              detail={`${evidence.length} evidence records; metadata ${evidenceMetadataAvailable}/${evidence.length}`}
             />
             <Output
               icon={FileSpreadsheet}
@@ -481,10 +491,13 @@ export function ReportsClient({
             {[
               ["Study", study.study_code],
               ["Protocol", protocol?.version ?? "No active protocol"],
+              ["Report status", reportStage],
+              ["Testing service", serviceLabel || "Not configured"],
               [
                 "Evidence complete",
                 `${evidenceComplete}/${pairs.length} pairs`,
               ],
+              ["Evidence metadata", `${evidenceMetadataAvailable}/${evidence.length} records`],
               ["Activity records", String(activityTotal)],
               ["Timezone", study.display_timezone],
             ].map(([label, value]) => (
@@ -525,8 +538,8 @@ export function ReportsClient({
             [
               ["assignments", "Assignment Disposition CSV"],
               ["pairs", "Raw Pair CSV"],
-              ["accepted", "Included Pair CSV"],
-              ["excluded", "Excluded Pair CSV"],
+              ["accepted", "Included Usable Pair CSV"],
+              ["excluded", "Rejected Pair CSV"],
               ["reviews", "Review Decisions CSV"],
               ["validation", "Rule-level Validation CSV"],
               ["evidence", "Evidence Inventory CSV"],
@@ -583,9 +596,10 @@ function ReportCharts({ pairs, reviews }: { pairs: MatchedPairSummary[]; reviews
   }));
   const latest = new Map<string, ExpertReview>();
   for (const review of reviews) if (!latest.has(review.matched_pair_id)) latest.set(review.matched_pair_id, review);
-  const reviewCounts = ["accepted", "flagged", "rejected", "pending"].map((status) => ({
+  const reviewOutcome = (pair: MatchedPairSummary) => latest.get(pair.id)?.status === "accepted" && latest.get(pair.id)?.technical_exception ? "accepted with exception" : latest.get(pair.id)?.status ?? "pending";
+  const reviewCounts = ["accepted", "accepted with exception", "rejected", "pending"].map((status) => ({
     label: status,
-    value: pairs.filter((pair) => (latest.get(pair.id)?.status ?? "pending") === status).length,
+    value: pairs.filter((pair) => reviewOutcome(pair) === status).length,
   }));
   const variance = [
     { label: "Below 0%", test: (value: number) => value < 0 },
@@ -594,11 +608,11 @@ function ReportCharts({ pairs, reviews }: { pairs: MatchedPairSummary[]; reviews
     { label: "15-30%", test: (value: number) => value >= 15 && value < 30 },
     { label: "30%+", test: (value: number) => value >= 30 },
   ].map((bucket) => ({ label: bucket.label, value: pairs.filter((pair) => pair.percentage_fare_difference !== null && bucket.test(pair.percentage_fare_difference)).length }));
-  return <section className="grid gap-3 lg:grid-cols-3"><Distribution title="Technical validation" rows={technical} total={pairs.length} /><Distribution title="Expert review" rows={reviewCounts} total={pairs.length} /><Distribution title="Directional price variance" rows={variance} total={pairs.length} /></section>;
+  return <section className="grid gap-3 lg:grid-cols-3"><Distribution title="Technical validation" rows={technical} total={pairs.length} /><Distribution title="Expert review" rows={reviewCounts} total={pairs.length} /><Distribution title="Directional price variance" subtitle="Positive means Tester B was higher; negative means Tester B was lower." rows={variance} total={pairs.length} /></section>;
 }
 
-function Distribution({ title, rows, total }: { title: string; rows: Array<{ label: string; value: number }>; total: number }) {
-  return <div className="rounded-md border border-border p-4"><p className="text-[10px] uppercase text-primary">Persisted results</p><h2 className="mt-1 text-sm font-semibold">{title}</h2><div className="mt-4 space-y-3">{rows.map((row) => <div key={row.label}><div className="mb-1 flex justify-between text-xs"><span className="capitalize text-muted-foreground">{row.label}</span><span className="mono">{row.value}</span></div><div className="h-2 overflow-hidden rounded-sm bg-secondary"><div className="h-full bg-primary" style={{ width: `${total ? Math.max((row.value / total) * 100, row.value ? 3 : 0) : 0}%` }} /></div></div>)}</div></div>;
+function Distribution({ title, subtitle, rows, total }: { title: string; subtitle?: string; rows: Array<{ label: string; value: number }>; total: number }) {
+  return <div className="rounded-md border border-border p-4"><p className="text-[10px] uppercase text-primary">Persisted results</p><h2 className="mt-1 text-sm font-semibold">{title}</h2>{subtitle ? <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{subtitle}</p> : null}<div className="mt-4 space-y-3">{rows.map((row) => <div key={row.label}><div className="mb-1 flex justify-between text-xs"><span className="capitalize text-muted-foreground">{row.label}</span><span className="mono">{row.value}</span></div><div className="h-2 overflow-hidden rounded-sm bg-secondary"><div className="h-full bg-primary" style={{ width: `${total ? Math.max((row.value / total) * 100, row.value ? 3 : 0) : 0}%` }} /></div></div>)}</div></div>;
 }
 function Output({
   icon: Icon,

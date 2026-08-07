@@ -4,9 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { Archive, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Play, Plus, Search, Users } from "lucide-react";
+import { Archive, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Play, Plus, Search, Users } from "lucide-react";
 import { toast } from "sonner";
-import { createStudyAction, selectStudyAction, transitionStudyStatusAction } from "@/app/paired-testing-demo/studies/actions";
+import { createStudyAction, extendStudyTestingPeriodAction, selectStudyAction, transitionStudyStatusAction } from "@/app/paired-testing-demo/studies/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { StudyRouteMap, type RoutePointMode } from "@/components/paired-testing/studies/study-route-map";
+import { configuredStudyServices } from "@/components/paired-testing/shared/study-service-context";
 import type { GeocodingResult } from "@/lib/geocoding/types";
 import type { ProviderServiceOption, Study, StudyCompletionReadiness } from "@/lib/data/studies";
 import type { AppRole } from "@/lib/data/profiles";
@@ -36,7 +37,6 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [studyType, setStudyType] = useState<"within_platform_pair" | "cross_platform_comparison">("within_platform_pair");
   const [studyQuestion, setStudyQuestion] = useState("");
   const [isolatedVariable, setIsolatedVariable] = useState("");
@@ -56,6 +56,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -233,6 +234,26 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     void resolveCoordinates(activeMode, latitude, longitude);
   }
 
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      toast.error("Current location is not available in this browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      const latitude = Number(position.coords.latitude.toFixed(6));
+      const longitude = Number(position.coords.longitude.toFixed(6));
+      setCustomLatitude(String(latitude));
+      setCustomLongitude(String(longitude));
+      setLocationEntryMode("coordinates");
+      setLocating(false);
+      void resolveCoordinates(activeMode, latitude, longitude);
+    }, (error) => {
+      setLocating(false);
+      toast.error(error.code === error.PERMISSION_DENIED ? "Location access was denied. Enter coordinates or search for a location instead." : "The current location could not be read.");
+    }, { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 });
+  }
+
   function changeStudyType(value: typeof studyType) {
     setStudyType(value);
     setSelectedPlatformIds([]);
@@ -303,7 +324,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     if (!pickup || !destination) return;
     startTransition(async () => {
       const result = await createStudyAction({
-        name, description, studyType, studyQuestion, isolatedVariable,
+        name, studyType, studyQuestion, isolatedVariable,
         targetPairCount: targetPairCount ? Number(targetPairCount) : null,
         defaultCurrency: pickup.currencyCode,
         displayTimezone: pickup.timezone,
@@ -341,7 +362,6 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
             <FieldError message={errors.name} />
             <p className="text-xs text-muted-foreground">The study code will be assigned automatically after the route country is validated.</p>
           </div>
-          <div className="space-y-2 md:col-span-2"><Label htmlFor="study-description">Description</Label><Textarea id="study-description" value={description} onChange={(event) => setDescription(event.target.value)} /></div>
           <div className="space-y-2"><Label htmlFor="study-type">Study mode</Label><Select value={studyType} onValueChange={(value) => changeStudyType(value as typeof studyType)}><SelectTrigger id="study-type" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="within_platform_pair">Within-platform paired testing</SelectItem><SelectItem value="cross_platform_comparison">Cross-platform comparison</SelectItem></SelectContent></Select></div>
           <div className="space-y-2"><Label htmlFor="target-pairs">Target pair count</Label><Input id="target-pairs" type="number" min="1" value={targetPairCount} onChange={(event) => setTargetPairCount(event.target.value)} aria-invalid={Boolean(errors.targetPairCount)} /><FieldError message={errors.targetPairCount} /></div>
           <div className="space-y-2 md:col-span-2"><Label htmlFor="study-question">Research question</Label><Textarea id="study-question" value={studyQuestion} onChange={(event) => setStudyQuestion(event.target.value)} aria-invalid={Boolean(errors.studyQuestion)} /><FieldError message={errors.studyQuestion} /></div>
@@ -358,7 +378,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 
           <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
             <div className="space-y-2"><Label>Location to set</Label><div className="grid grid-cols-2 rounded-md border border-border p-1">{(["pickup", "destination"] as const).map((mode) => <button key={mode} type="button" onClick={() => changeActiveMode(mode)} className={`h-9 text-xs font-medium capitalize ${activeMode === mode ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{mode === "pickup" ? <MapPin className="mr-1 inline size-3.5 text-primary" /> : <MapPin className="mr-1 inline size-3.5 text-amber-500" />}{mode}</button>)}</div></div>
-            <div className="space-y-2"><Label>Location entry</Label><div className="flex h-11 w-fit items-center gap-1 rounded-md border border-border p-1"><Button type="button" size="sm" variant={locationEntryMode === "search" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("search")}><Search className="size-4" />Search</Button><Button type="button" size="sm" variant={locationEntryMode === "coordinates" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("coordinates")}><LocateFixed className="size-4" />Coordinates</Button></div></div>
+            <div className="space-y-2"><Label>Location entry</Label><div className="flex flex-wrap items-center gap-2"><div className="flex h-11 w-fit items-center gap-1 rounded-md border border-border p-1"><Button type="button" size="sm" variant={locationEntryMode === "search" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("search")}><Search className="size-4" />Search</Button><Button type="button" size="sm" variant={locationEntryMode === "coordinates" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("coordinates")}><LocateFixed className="size-4" />Coordinates</Button></div><Button type="button" size="sm" variant="outline" onClick={useCurrentLocation} disabled={locating || resolving}>{locating ? <LoaderCircle className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}{locating ? "Locating..." : `Use current location for ${activeMode}`}</Button></div></div>
           </div>
 
           {locationEntryMode === "search" ? <div className="grid gap-3 sm:grid-cols-[1fr_auto]"><Input aria-label={`Search ${activeMode} location`} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} placeholder={`Search ${activeMode} in ${searchCountry === "PH" ? "the Philippines" : "the United States"}`} /><Button type="button" variant="outline" onClick={() => void search()} disabled={searching || searchQuery.trim().length < 3}>{searching ? <LoaderCircle className="size-4 animate-spin" /> : <Search className="size-4" />}Search</Button></div> : null}
@@ -441,6 +461,8 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 function StudyLifecycleControl({ study, canArchive, readiness }: { study: Study; canArchive: boolean; readiness?: StudyCompletionReadiness }) {
   const [open, setOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extendUntil, setExtendUntil] = useState("");
   const [pending, startTransition] = useTransition();
   const transition = study.status === "draft" ? { status: "active" as const, label: "Activate", icon: Play, description: "Activation requires an active protocol and route, and enables assignment collection." }
     : study.status === "active" ? { status: "paused" as const, label: "Pause", icon: Pause, description: "Pausing blocks new assignments, tester submissions, and evidence uploads." }
@@ -455,15 +477,25 @@ function StudyLifecycleControl({ study, canArchive, readiness }: { study: Study;
       else toast.error(result.message);
     });
   }
+  function extend() {
+    if (!extendUntil) return toast.error("Choose a new testing end date and time.");
+    startTransition(async () => {
+      const result = await extendStudyTestingPeriodAction(study.id, fromZonedTime(extendUntil, study.display_timezone).toISOString());
+      if (result.ok) { toast.success(result.message); setExtendOpen(false); setExtendUntil(""); }
+      else toast.error(result.message);
+    });
+  }
   if (study.status === "archived") return null;
-  return <div className="flex items-center gap-1">{transition ? <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button size="sm" variant="outline">{Icon ? <Icon className="size-3.5" /> : null}{transition.label}</Button></DialogTrigger><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{transition.label} {study.name}?</DialogTitle><DialogDescription>{transition.description}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button><Button onClick={() => submit(transition.status)} disabled={pending}>{pending ? "Updating..." : transition.label}</Button></DialogFooter></DialogContent></Dialog> : null}{["active", "paused"].includes(study.status) ? <Dialog open={completeOpen} onOpenChange={setCompleteOpen}><DialogTrigger asChild><Button size="sm" variant="ghost"><CircleCheck className="size-3.5" />Complete</Button></DialogTrigger><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Study completion readiness</DialogTitle><DialogDescription>{study.name} can be completed only after collection, technical validation, evidence, and expert review are finalized.</DialogDescription></DialogHeader>{readiness ? <div className="space-y-4"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><ReadinessMetric label="Assignments" value={`${readiness.assignments.completed + readiness.assignments.cancelled + readiness.assignments.expired}/${readiness.assignments.total}`} /><ReadinessMetric label="Validated pairs" value={`${readiness.pairs.technically_processed}/${readiness.pairs.total}`} /><ReadinessMetric label="Evidence complete" value={`${readiness.evidence.complete}/${readiness.evidence.required}`} /><ReadinessMetric label="Final reviews" value={`${readiness.reviews.accepted + readiness.reviews.flagged + readiness.reviews.rejected}/${readiness.pairs.total}`} /></div><div className={`rounded-md border p-3 text-xs ${readiness.ready ? "border-primary/30 bg-primary/5" : "border-amber-500/25 bg-amber-500/5"}`}><p className="font-semibold">{readiness.ready ? "All completion requirements are satisfied." : "Completion blockers"}</p>{readiness.blockers.length ? <ul className="mt-2 space-y-1 text-muted-foreground">{readiness.blockers.map((blocker) => <li key={blocker}>- {blocker}</li>)}</ul> : <p className="mt-1 text-muted-foreground">The study will become read-only for collection after completion.</p>}</div><div className="grid grid-cols-4 gap-2 text-center text-[10px] text-muted-foreground"><span>{readiness.reviews.accepted} accepted</span><span>{readiness.reviews.flagged} flagged</span><span>{readiness.reviews.rejected} rejected</span><span>{readiness.reviews.pending} pending</span></div></div> : <p className="text-sm text-muted-foreground">Readiness information is unavailable.</p>}<DialogFooter><Button variant="outline" onClick={() => setCompleteOpen(false)} disabled={pending}>Close</Button><Button onClick={() => submit("completed")} disabled={pending || !readiness?.ready}>{pending ? "Completing..." : "Complete study"}</Button></DialogFooter></DialogContent></Dialog> : null}</div>;
+  const currentTestingEnd = study.testing_ends_at ? formatInTimeZone(new Date(study.testing_ends_at), study.display_timezone, "yyyy-MM-dd'T'HH:mm") : undefined;
+  const currentTestingEndLabel = study.testing_ends_at ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: study.display_timezone }).format(new Date(study.testing_ends_at)) : "Not set";
+  return <div className="flex items-center gap-1">{["active", "paused"].includes(study.status) ? <Dialog open={extendOpen} onOpenChange={setExtendOpen}><DialogTrigger asChild><Button size="sm" variant="ghost"><CalendarClock className="size-3.5" />Extend window</Button></DialogTrigger><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Extend testing period</DialogTitle><DialogDescription>Collection remains closed until the new end is saved. The extension is recorded in the activity log.</DialogDescription></DialogHeader><div className="space-y-3"><div className="rounded-md border border-border bg-secondary/25 px-3 py-2 text-xs"><p className="text-muted-foreground">Current testing end</p><p className="mt-1 font-medium">{currentTestingEndLabel} ({study.display_timezone})</p></div><div className="space-y-2"><Label htmlFor={`extend-study-${study.id}`}>New testing end ({study.display_timezone})</Label><Input id={`extend-study-${study.id}`} type="datetime-local" value={extendUntil} onChange={(event) => setExtendUntil(event.target.value)} min={currentTestingEnd} /><p className="text-[10px] text-muted-foreground">Dates before the current study end are unavailable. The new end must also be in the future.</p></div></div><DialogFooter><Button variant="outline" onClick={() => setExtendOpen(false)} disabled={pending}>Cancel</Button><Button onClick={extend} disabled={pending}>{pending ? "Extending..." : "Extend collection"}</Button></DialogFooter></DialogContent></Dialog> : null}{transition ? <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button size="sm" variant="outline">{Icon ? <Icon className="size-3.5" /> : null}{transition.label}</Button></DialogTrigger><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{transition.label} {study.name}?</DialogTitle><DialogDescription>{transition.description}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button><Button onClick={() => submit(transition.status)} disabled={pending}>{pending ? "Updating..." : transition.label}</Button></DialogFooter></DialogContent></Dialog> : null}{["active", "paused"].includes(study.status) ? <Dialog open={completeOpen} onOpenChange={setCompleteOpen}><DialogTrigger asChild><Button size="sm" variant="ghost"><CircleCheck className="size-3.5" />Complete</Button></DialogTrigger><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Study completion readiness</DialogTitle><DialogDescription>{study.name} can be completed only after the target number of accepted, usable pairs and all final review work are complete.</DialogDescription></DialogHeader>{readiness ? <div className="space-y-4"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><ReadinessMetric label="Assignments closed" value={`${readiness.assignments.completed + readiness.assignments.cancelled + readiness.assignments.expired}/${readiness.assignments.total}`} /><ReadinessMetric label="Pairs processed" value={`${readiness.pairs.technically_processed}/${readiness.pairs.total}`} /><ReadinessMetric label="Target progress" value={`${readiness.pairs.accepted_usable}/${study.target_pair_count ?? "Not set"}`} /><ReadinessMetric label="Still needed" value={readiness.pairs.replacement_needed} /></div><div className="rounded-md border border-border bg-secondary/25 px-3 py-2 text-xs leading-5 text-muted-foreground"><span className="font-medium text-foreground">A pair counts toward the target when it is accepted with complete required evidence.</span> It may either be technically usable or be accepted with a documented technical exception. Rejected pairs do not count; legacy flagged records must be resolved before completion.</div><div className={`rounded-md border p-3 text-xs ${readiness.ready ? "border-primary/30 bg-primary/5" : "border-amber-500/25 bg-amber-500/5"}`}><p className="font-semibold">{readiness.ready ? "Ready to complete" : "What still needs attention"}</p>{readiness.blockers.length ? <ul className="mt-2 space-y-1 text-muted-foreground">{readiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p className="mt-1 text-muted-foreground">The study will become read-only for collection after completion.</p>}</div><div className="grid grid-cols-2 gap-x-2 gap-y-1 border-t border-border pt-3 text-[10px] text-muted-foreground sm:grid-cols-5"><span><strong className="text-foreground">{readiness.reviews.accepted}</strong> accepted reviews</span><span><strong className="text-foreground">{readiness.reviews.accepted_with_exception}</strong> technical exceptions</span><span><strong className="text-foreground">{readiness.reviews.flagged}</strong> legacy flagged</span><span><strong className="text-foreground">{readiness.reviews.rejected}</strong> rejected</span><span><strong className="text-foreground">{readiness.reviews.pending}</strong> awaiting review</span></div></div> : <p className="text-sm text-muted-foreground">Readiness information is unavailable.</p>}<DialogFooter><Button variant="outline" onClick={() => setCompleteOpen(false)} disabled={pending}>Close</Button><Button onClick={() => submit("completed")} disabled={pending || !readiness?.ready}>{pending ? "Completing..." : "Complete study"}</Button></DialogFooter></DialogContent></Dialog> : null}</div>;
 }
 
-function ReadinessMetric({ label, value }: { label: string; value: string }) {
+function ReadinessMetric({ label, value }: { label: string; value: string | number }) {
   return <div className="rounded-md border border-border p-3"><p className="text-[9px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>;
 }
 
-function StudyList({ studies, activeStudyId, canArchive, readiness }: { studies: Study[]; activeStudyId: string | null; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness> }) {
+function StudyList({ studies, activeStudyId, canArchive, readiness, providerOptions }: { studies: Study[]; activeStudyId: string | null; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   function select(study: Study) {
     setPendingId(study.id);
@@ -473,10 +505,13 @@ function StudyList({ studies, activeStudyId, canArchive, readiness }: { studies:
       setPendingId(null);
     });
   }
-  return <div className="overflow-hidden rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{studies.map((study) => <TableRow key={study.id}><TableCell className="min-w-64 whitespace-normal"><p className="font-medium">{study.name}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p></TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell><div className="flex flex-wrap justify-end gap-2"><StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "outline"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select"}</Button></div></TableCell></TableRow>)}{!studies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies are available yet.</TableCell></TableRow> : null}</TableBody></Table></div>;
+  return <div className="overflow-hidden rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{studies.map((study) => {
+    const serviceLabel = configuredStudyServices(study, providerOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
+    return <TableRow key={study.id}><TableCell className="min-w-72 whitespace-normal"><p className="font-medium">{study.name}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell><div className="flex flex-wrap justify-end gap-2"><StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "outline"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select"}</Button></div></TableCell></TableRow>;
+  })}{!studies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies are available yet.</TableCell></TableRow> : null}</TableBody></Table></div>;
 }
 
 export function StudiesManager({ studies, activeStudyId, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
   const [tab, setTab] = useState("studies");
-  return <Tabs value={tab} onValueChange={setTab}><div className="flex items-center justify-between gap-3"><TabsList><TabsTrigger value="studies">All studies</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><Button onClick={() => setTab("create")}><Plus className="size-4" />Create study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} canArchive={role === "admin"} readiness={readiness} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
+  return <Tabs value={tab} onValueChange={setTab}><div className="flex items-center justify-between gap-3"><TabsList><TabsTrigger value="studies">All studies</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><Button onClick={() => setTab("create")}><Plus className="size-4" />Create study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
 }

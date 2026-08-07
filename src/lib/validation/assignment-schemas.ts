@@ -36,3 +36,17 @@ export const createAssignmentSchema = assignmentSetupSchema.and(z.object({
 });
 
 export type CreateAssignmentInput = z.input<typeof createAssignmentSchema>;
+
+export const createAssignmentBatchSchema = assignmentSetupSchema.and(z.object({
+  studyId: z.string().uuid(),
+  testerPairs: z.array(assignmentTesterPairSchema).min(1, "Add at least one tester pair.").max(50),
+  timezone: z.string().trim().min(1).max(100),
+  instructions: z.string().trim().max(1000).optional().transform((value) => value || null),
+})).superRefine((values, context) => {
+  const selected = values.testerPairs.flatMap((pair) => [pair.testerAId, pair.testerBId]);
+  if (new Set(selected).size !== selected.length) {
+    context.addIssue({ code: "custom", path: ["testerPairs"], message: "A tester can be assigned only once in a batch." });
+  }
+});
+
+export type CreateAssignmentBatchInput = z.input<typeof createAssignmentBatchSchema>;

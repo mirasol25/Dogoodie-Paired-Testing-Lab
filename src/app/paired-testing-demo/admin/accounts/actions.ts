@@ -111,8 +111,9 @@ export async function updateAccountAction(input: unknown): Promise<AccountUpdate
     })
     .eq("user_id", parsed.data.userId);
 
-  if (roleError) return { ok: false, message: "The profile changed, but its role could not be updated." };
+  if (roleError) return { ok: false, message: roleError.message || "The account role could not be updated." };
 
   revalidatePath("/paired-testing-demo/admin/accounts");
+  revalidatePath("/paired-testing-demo", "layout");
   return { ok: true, message: "Account updated." };
 }

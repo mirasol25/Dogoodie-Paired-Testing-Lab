@@ -12,6 +12,7 @@ export interface MatchedPairSubmission extends SubmissionRow {
 export interface MatchedPairSummary extends PairRow {
   assignmentCode: string;
   reviewStatus: Database["public"]["Enums"]["review_status"];
+  reviewTechnicalException: boolean;
   submissionA: MatchedPairSubmission;
   submissionB: MatchedPairSubmission;
 }
@@ -43,7 +44,7 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
     supabase.from("submissions").select("*").in("id", submissionIds),
     supabase.from("assignment_testers").select("assignment_id,user_id,slot").in("assignment_id", assignmentIds),
     supabase.rpc("list_assignment_pair_roster", { p_study_id: studyId }),
-    supabase.from("expert_reviews").select("matched_pair_id,status,updated_at").in("matched_pair_id", pairs.map((pair) => pair.id)).order("updated_at", { ascending: false }),
+    supabase.from("expert_reviews").select("matched_pair_id,status,technical_exception,updated_at").in("matched_pair_id", pairs.map((pair) => pair.id)).order("updated_at", { ascending: false }),
   ]);
   if (assignmentsResult.error || submissionsResult.error || slotsResult.error || rosterResult.error || reviewsResult.error) {
     throw new MatchedPairDataError("Matched-pair details could not be loaded.");
@@ -55,9 +56,9 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
     `${row.assignment_id}:${row.user_id}`,
     row.display_name?.trim() || row.email || "Unavailable tester",
   ]));
-  const reviews = new Map<string, Database["public"]["Enums"]["review_status"]>();
+  const reviews = new Map<string, { status: Database["public"]["Enums"]["review_status"]; technicalException: boolean }>();
   for (const review of reviewsResult.data) {
-    if (!reviews.has(review.matched_pair_id)) reviews.set(review.matched_pair_id, review.status);
+    if (!reviews.has(review.matched_pair_id)) reviews.set(review.matched_pair_id, { status: review.status, technicalException: review.technical_exception });
   }
 
   return pairs.flatMap((pair) => {
@@ -69,7 +70,8 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
     return [{
       ...pair,
       assignmentCode: assignments.get(pair.assignment_id) ?? "Unknown assignment",
-      reviewStatus: reviews.get(pair.id) ?? "pending",
+      reviewStatus: reviews.get(pair.id)?.status ?? "pending",
+      reviewTechnicalException: reviews.get(pair.id)?.technicalException ?? false,
       submissionA: { ...a, slot: "tester_a", testerName: roster.get(`${pair.assignment_id}:${slotA.user_id}`) ?? "Tester A" },
       submissionB: { ...b, slot: "tester_b", testerName: roster.get(`${pair.assignment_id}:${slotB.user_id}`) ?? "Tester B" },
     }];
@@ -120,9 +122,9 @@ export async function listStudyReviews(pairIds: string[]): Promise<ExpertReview[
   return data;
 }
 
-export async function saveExpertReview(pairId: string, status: "pending" | "accepted" | "flagged" | "rejected", reason: string, note: string): Promise<ExpertReview> {
+export async function saveExpertReview(pairId: string, status: "pending" | "accepted" | "rejected", reason: string, note: string, technicalException = false): Promise<ExpertReview> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("save_expert_review", { p_matched_pair_id: pairId, p_status: status, p_reason: reason, p_note: note });
+  const { data, error } = await supabase.rpc("save_expert_review", { p_matched_pair_id: pairId, p_status: status, p_reason: reason, p_note: note, p_technical_exception: technicalException });
   if (error || !data) throw new MatchedPairDataError(error?.message || "The expert review could not be saved.");
   return data;
 }
