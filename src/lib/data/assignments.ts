@@ -264,7 +264,9 @@ export async function getLatestTesterTechnicalProfile(userId: string): Promise<P
   // normal persistent-profile loading resumes automatically.
   if (error && (error.code === "42703" || /(?:network_type|device_type|operating_system|app_version)/i.test(error.message))) return null;
   if (error) throw new AssignmentDataError("Your saved device profile could not be loaded.");
-  if (!data?.network_type || !data.device_type || !data.operating_system || !data.operating_system_version || !data.app_version) return null;
+  // Values are independently reusable. A newly added field should not hide
+  // the rest of a tester's saved profile just because that one value is blank.
+  if (!data) return null;
   return data;
 }
 
