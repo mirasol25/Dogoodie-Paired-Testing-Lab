@@ -11,6 +11,7 @@ export interface MatchedPairSubmission extends SubmissionRow {
 
 export interface MatchedPairSummary extends PairRow {
   assignmentCode: string;
+  protocolId: string;
   reviewStatus: Database["public"]["Enums"]["review_status"];
   reviewTechnicalException: boolean;
   submissionA: MatchedPairSubmission;
@@ -40,7 +41,7 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
   const assignmentIds = pairs.map((pair) => pair.assignment_id);
   const submissionIds = pairs.flatMap((pair) => [pair.submission_a_id, pair.submission_b_id]);
   const [assignmentsResult, submissionsResult, slotsResult, rosterResult, reviewsResult] = await Promise.all([
-    supabase.from("assignments").select("id,assignment_code").in("id", assignmentIds),
+    supabase.from("assignments").select("id,assignment_code,protocol_id").in("id", assignmentIds),
     supabase.from("submissions").select("*").in("id", submissionIds),
     supabase.from("assignment_testers").select("assignment_id,user_id,slot").in("assignment_id", assignmentIds),
     supabase.rpc("list_assignment_pair_roster", { p_study_id: studyId }),
@@ -50,7 +51,10 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
     throw new MatchedPairDataError("Matched-pair details could not be loaded.");
   }
 
-  const assignments = new Map(assignmentsResult.data.map((row) => [row.id, row.assignment_code]));
+  const assignments = new Map(assignmentsResult.data.map((row) => [row.id, {
+    assignmentCode: row.assignment_code,
+    protocolId: row.protocol_id,
+  }]));
   const submissions = new Map(submissionsResult.data.map((row) => [row.id, row]));
   const roster = new Map(rosterResult.data.map((row) => [
     `${row.assignment_id}:${row.user_id}`,
@@ -69,7 +73,8 @@ export async function listStudyMatchedPairs(studyId: string): Promise<MatchedPai
     if (!a || !b || !slotA || !slotB) return [];
     return [{
       ...pair,
-      assignmentCode: assignments.get(pair.assignment_id) ?? "Unknown assignment",
+      assignmentCode: assignments.get(pair.assignment_id)?.assignmentCode ?? "Unknown assignment",
+      protocolId: assignments.get(pair.assignment_id)?.protocolId ?? "",
       reviewStatus: reviews.get(pair.id)?.status ?? "pending",
       reviewTechnicalException: reviews.get(pair.id)?.technicalException ?? false,
       submissionA: { ...a, slot: "tester_a", testerName: roster.get(`${pair.assignment_id}:${slotA.user_id}`) ?? "Tester A" },

@@ -60,7 +60,16 @@ function formattedValue(value: unknown, timezone: string): string {
   return Array.isArray(value) ? value.map((item) => formattedValue(item, timezone)).join(", ") : String(value);
 }
 
-function thresholds(value: unknown, ruleCode: string) {
+function thresholds(value: unknown, ruleCode: string, protocolConfiguration?: unknown) {
+  const protocol = protocolConfiguration && typeof protocolConfiguration === "object" && !Array.isArray(protocolConfiguration)
+    ? protocolConfiguration as Record<string, unknown>
+    : null;
+  const currentProtocolThreshold = ruleCode === "request_time_gap"
+    ? protocol?.request_time_gap
+    : ruleCode === "location_gap" || ruleCode.includes("proximity")
+      ? protocol?.location_gap
+      : null;
+  if (currentProtocolThreshold && typeof currentProtocolThreshold === "object" && !Array.isArray(currentProtocolThreshold)) value = currentProtocolThreshold;
   if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length) return null;
   const item = value as Record<string, unknown>;
   if (ruleCode === "request_time_gap") return `Pass: 0-${item.preferred_max_seconds}s | Warning: ${item.preferred_max_seconds}-${item.maximum_seconds}s | Fail: over ${item.maximum_seconds}s`;
@@ -87,7 +96,7 @@ function finding(result: MatchedPairValidationResult) {
   return raw;
 }
 
-export function ValidationResultsView({ results, timezone }: { results: MatchedPairValidationResult[]; timezone: string }) {
+export function ValidationResultsView({ results, timezone, protocolConfiguration }: { results: MatchedPairValidationResult[]; timezone: string; protocolConfiguration?: unknown }) {
   const normalized = normalizedValidationResults(results);
   const attention = normalized.filter((result) => result.status !== "pass" && result.status !== "not_applicable");
   const passed = normalized.filter((result) => result.status === "pass" || result.status === "not_applicable");
@@ -95,15 +104,15 @@ export function ValidationResultsView({ results, timezone }: { results: MatchedP
   const warnings = normalized.filter((result) => result.status === "warning").length;
   return <div className="space-y-4">
     <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-md border border-border bg-card/25 px-4 py-3 text-xs"><span><strong className="text-foreground">{requiredFailures}</strong> required failures</span><span><strong className="text-foreground">{warnings}</strong> warnings</span><span className="text-muted-foreground">{normalized.length} applicable checks</span></div>
-    {attention.length ? <ResultGroups results={attention} timezone={timezone} /> : <div className="rounded-md border border-primary/20 bg-primary/[0.035] px-4 py-5"><p className="text-sm font-semibold text-primary">No technical findings need attention</p><p className="mt-1 text-xs text-muted-foreground">All required checks passed and no advisory differences were found.</p></div>}
-    {passed.length ? <details className="group overflow-hidden rounded-md border border-border"><summary className="flex cursor-pointer list-none items-center justify-between bg-card/35 px-4 py-3 text-sm font-medium"><span>Passed and not-applicable checks ({passed.length})</span><ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" /></summary><div className="border-t border-border"><ResultGroups results={passed} timezone={timezone} compact /></div></details> : null}
+    {attention.length ? <ResultGroups results={attention} timezone={timezone} protocolConfiguration={protocolConfiguration} /> : <div className="rounded-md border border-primary/20 bg-primary/[0.035] px-4 py-5"><p className="text-sm font-semibold text-primary">No technical findings need attention</p><p className="mt-1 text-xs text-muted-foreground">All required checks passed and no advisory differences were found.</p></div>}
+    {passed.length ? <details className="group overflow-hidden rounded-md border border-border"><summary className="flex cursor-pointer list-none items-center justify-between bg-card/35 px-4 py-3 text-sm font-medium"><span>Passed and not-applicable checks ({passed.length})</span><ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" /></summary><div className="border-t border-border"><ResultGroups results={passed} timezone={timezone} protocolConfiguration={protocolConfiguration} compact /></div></details> : null}
   </div>;
 }
 
-function ResultGroups({ results, timezone, compact = false }: { results: MatchedPairValidationResult[]; timezone: string; compact?: boolean }) {
+function ResultGroups({ results, timezone, protocolConfiguration, compact = false }: { results: MatchedPairValidationResult[]; timezone: string; protocolConfiguration?: unknown; compact?: boolean }) {
   return <div className="space-y-4">{categoryOrder.map((name) => {
     const grouped = results.filter((result) => category(result) === name);
     if (!grouped.length) return null;
-    return <section key={name}><div className={compact ? "px-4 pt-4" : "mb-2"}><p className="text-[10px] font-semibold uppercase text-muted-foreground">{name}</p></div><div className={compact ? "overflow-x-auto" : "overflow-hidden rounded-md border border-border"}><Table className="min-w-[900px] table-fixed"><TableHeader><TableRow><TableHead className="w-[32%]">Rule</TableHead><TableHead className="w-[17%]">Tester A value</TableHead><TableHead className="w-[17%]">Compared value</TableHead><TableHead className="w-[24%]">Finding</TableHead><TableHead className="w-[10%]">Result</TableHead></TableRow></TableHeader><TableBody>{grouped.map((result) => <TableRow key={result.id} className={`[&_td]:h-24 [&_td]:align-top [&_td]:py-4 ${result.status === "fail" ? "bg-red-400/[0.025]" : result.status === "warning" ? "bg-amber-400/[0.025]" : ""}`}><TableCell className="break-words"><p className="font-medium">{result.label}</p><p className="mt-1 text-[10px] capitalize text-muted-foreground">{result.requirement_level} | {result.rule_code.includes("gap") || result.rule_code.includes("proximity") ? "Threshold comparison" : "Exact comparison"}</p><p className="mt-2 max-w-md text-[11px] leading-4 text-muted-foreground">{result.explanation}</p>{thresholds(result.threshold_configuration, result.rule_code) ? <p className="mt-1 text-[10px] text-primary/75">{thresholds(result.threshold_configuration, result.rule_code)}</p> : null}</TableCell><TableCell className="break-words text-xs text-muted-foreground">{formattedValue(result.tester_a_value, timezone)}</TableCell><TableCell className="break-words text-xs text-muted-foreground">{formattedValue(result.tester_b_value, timezone)}</TableCell><TableCell className="break-words text-xs font-medium">{finding(result)}</TableCell><TableCell><StatusBadge status={result.status} /></TableCell></TableRow>)}</TableBody></Table></div></section>;
+    return <section key={name}><div className={compact ? "px-4 pt-4" : "mb-2"}><p className="text-[10px] font-semibold uppercase text-muted-foreground">{name}</p></div><div className={compact ? "overflow-x-auto" : "overflow-hidden rounded-md border border-border"}><Table className="min-w-[900px] table-fixed"><TableHeader><TableRow><TableHead className="w-[32%]">Rule</TableHead><TableHead className="w-[17%]">Tester A value</TableHead><TableHead className="w-[17%]">Compared value</TableHead><TableHead className="w-[24%]">Finding</TableHead><TableHead className="w-[10%]">Result</TableHead></TableRow></TableHeader><TableBody>{grouped.map((result) => <TableRow key={result.id} className={`[&_td]:h-24 [&_td]:align-top [&_td]:py-4 ${result.status === "fail" ? "bg-red-400/[0.025]" : result.status === "warning" ? "bg-amber-400/[0.025]" : ""}`}><TableCell className="break-words"><p className="font-medium">{result.label}</p><p className="mt-1 text-[10px] capitalize text-muted-foreground">{result.requirement_level} | {result.rule_code.includes("gap") || result.rule_code.includes("proximity") ? "Threshold comparison" : "Exact comparison"}</p><p className="mt-2 max-w-md text-[11px] leading-4 text-muted-foreground">{result.explanation}</p>{thresholds(result.threshold_configuration, result.rule_code, protocolConfiguration) ? <p className="mt-1 text-[10px] text-primary/75">{thresholds(result.threshold_configuration, result.rule_code, protocolConfiguration)}</p> : null}</TableCell><TableCell className="break-words text-xs text-muted-foreground">{formattedValue(result.tester_a_value, timezone)}</TableCell><TableCell className="break-words text-xs text-muted-foreground">{formattedValue(result.tester_b_value, timezone)}</TableCell><TableCell className="break-words text-xs font-medium">{finding(result)}</TableCell><TableCell><StatusBadge status={result.status} /></TableCell></TableRow>)}</TableBody></Table></div></section>;
   })}</div>;
 }
