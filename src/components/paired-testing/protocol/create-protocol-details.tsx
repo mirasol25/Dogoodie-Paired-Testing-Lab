@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function CreateProtocolDetails({ study }: { study: { id: string; name: string; studyCode: string; studyQuestion: string | null; isolatedVariable: string | null } }) {
+export function CreateProtocolDetails({ study }: { study: { id: string; name: string; studyCode: string; studyQuestion: string | null; isolatedVariable: string | null; testerAValue?: string; testerBValue?: string } }) {
   const router = useRouter();
   const [title, setTitle] = useState(`${study.name} Testing Protocol`);
-  const [testerAValue, setTesterAValue] = useState("");
-  const [testerBValue, setTesterBValue] = useState("");
+  const [testerAValue, setTesterAValue] = useState(study.testerAValue ?? "");
+  const [testerBValue, setTesterBValue] = useState(study.testerBValue ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 

@@ -59,6 +59,8 @@ describe("study creation validation", () => {
 });
 
 describe("initial route validation", () => {
+  const serviceA = "00000000-0000-4000-8000-000000000001";
+  const serviceB = "00000000-0000-4000-8000-000000000002";
   const pickup = {
     label: "Public pickup",
     formattedAddress: "Manila, Philippines",
@@ -81,7 +83,9 @@ describe("initial route validation", () => {
       routeName: "Manila public route",
       pickup,
       destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
-      platformServiceIds: ["00000000-0000-4000-8000-000000000001"],
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
     }).success).toBe(true);
   });
 
@@ -95,7 +99,47 @@ describe("initial route validation", () => {
       routeName: "Manila public route",
       pickup,
       destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
-      platformServiceIds: ["00000000-0000-4000-8000-000000000001"],
+      platformServiceIds: [serviceA, serviceB],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceB,
+    }).success).toBe(false);
+  });
+
+  it("accepts a Canadian route with CAD and a Canadian timezone", () => {
+    const canadianPickup = {
+      ...pickup,
+      formattedAddress: "Toronto, Ontario, Canada",
+      latitude: 43.6532,
+      longitude: -79.3832,
+      countryCode: "CA",
+      regionName: "Ontario",
+      currencyCode: "CAD",
+      timezone: "America/Toronto",
+    };
+    expect(createStudyWithRouteSchema.safeParse({
+      ...withoutStudyCode(validStudy),
+      searchCountryCode: "CA",
+      routeName: "Toronto public route",
+      pickup: canadianPickup,
+      destination: { ...canadianPickup, label: "Public destination", latitude: 43.67, longitude: -79.39 },
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
+    }).success).toBe(true);
+  });
+
+  it("requires a target pair count for the complete study workflow", () => {
+    const studyWithoutCode = withoutStudyCode(validStudy);
+    expect(createStudyWithRouteSchema.safeParse({
+      ...studyWithoutCode,
+      targetPairCount: null,
+      searchCountryCode: "PH",
+      routeName: "Manila public route",
+      pickup,
+      destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
     }).success).toBe(false);
   });
 
@@ -106,7 +150,9 @@ describe("initial route validation", () => {
       routeName: "Invalid route",
       pickup,
       destination: { ...pickup, countryCode: "US", currencyCode: "USD" },
-      platformServiceIds: ["00000000-0000-4000-8000-000000000001"],
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
     }).success).toBe(false);
   });
 });

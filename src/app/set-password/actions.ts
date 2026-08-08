@@ -60,9 +60,9 @@ export async function setPasswordAction(
       return { message: error instanceof Error ? error.message : "Your country could not be verified." };
     }
   }
-  const verifiedCountryCode = gpsCountry || (["PH", "US"].includes(ipCountry) ? ipCountry : "");
+  const verifiedCountryCode = gpsCountry || (["PH", "US", "CA"].includes(ipCountry) ? ipCountry : "");
   if (!verifiedCountryCode) return { message: "Your country could not be detected. Allow location access and try again." };
-  const verifiedCountryName = verifiedCountryCode === "PH" ? "Philippines" : "United States";
+  const verifiedCountryName = { PH: "Philippines", US: "United States", CA: "Canada" }[verifiedCountryCode];
   const locationReviewStatus = gpsCountry && ipCountry && ipCountry !== gpsCountry ? "review_required" : "verified";
 
   const supabase = await createClient();
@@ -82,29 +82,37 @@ export async function setPasswordAction(
       screen_size: parsed.data.screenSize || null, registration_user_agent: parsed.data.userAgent || null,
       device_profile_created_at: new Date().toISOString(),
     })
-    .eq("id", user.id)
-    .eq("account_status", "pending");
+    .eq("id", user.id);
   if (profileUpdateError) return { message: profileUpdateError.message || "Your tester location could not be saved." };
 
   // PostgREST may report an update-response error after the database has
   // committed the change. The persisted profile state is authoritative.
   const { data: finalProfile, error: finalProfileError } = await admin
     .from("profiles")
-    .select("account_status,tester_country_code,device_type")
+    .select("account_status")
     .eq("id", user.id)
     .maybeSingle();
-  if (finalProfileError || finalProfile?.account_status !== "active" || finalProfile.tester_country_code !== verifiedCountryCode || finalProfile.device_type !== parsed.data.deviceType) {
+  if (finalProfileError || finalProfile?.account_status !== "active") {
     return { message: "Your password was saved, but the account could not be activated. Contact an administrator." };
   }
 
+  const completedAt = new Date().toISOString();
+  const completedMetadata = {
+    ...user.user_metadata,
+    password_setup_required: false,
+    password_setup_completed_at: completedAt,
+  };
   const { error: metadataError } = await supabase.auth.updateUser({
     data: {
       password_setup_required: false,
-      password_setup_completed_at: new Date().toISOString(),
+      password_setup_completed_at: completedAt,
     },
   });
   if (metadataError) {
-    return { message: "Your password was saved, but setup could not be completed. Try again." };
+    const { error: adminMetadataError } = await admin.auth.admin.updateUserById(user.id, {
+      user_metadata: completedMetadata,
+    });
+    if (adminMetadataError) return { message: "Your password was saved, but setup could not be completed. Try again." };
   }
 
   redirect("/paired-testing-demo");

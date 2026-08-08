@@ -346,14 +346,14 @@ export async function getAssignmentSetupOptions(
     ? studyConfiguration as Record<string, unknown>
     : {};
   const serviceIds = Array.isArray(configuration.platform_service_ids)
-    ? configuration.platform_service_ids.filter((id): id is string => typeof id === "string")
+    ? [...new Set(configuration.platform_service_ids.filter((id): id is string => typeof id === "string"))]
     : [];
 
   const [routesResult, protocolsResult, servicesResult] = await Promise.all([
     supabase.from("study_routes").select("id,route_name,pickup_location_id,destination_location_id").eq("study_id", studyId).eq("is_active", true).order("created_at"),
     supabase.from("protocols").select("id,protocol_code,version,title,isolated_variable,tester_a_value,tester_b_value").eq("study_id", studyId).eq("status", "active").order("effective_at", { ascending: false }),
     serviceIds.length
-      ? supabase.from("platform_services").select("id,platform_id,name,normalized_service_category").in("id", serviceIds).eq("is_active", true)
+      ? supabase.from("platform_services").select("id,platform_id,name,normalized_service_category").in("id", serviceIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (routesResult.error || protocolsResult.error || servicesResult.error) {

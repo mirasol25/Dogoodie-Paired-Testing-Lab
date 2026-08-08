@@ -6,7 +6,10 @@ import type { GeocodingResult } from "@/lib/geocoding/types";
 const supportedMarkets: Record<string, { currencyCode: string }> = {
   PH: { currencyCode: "PHP" },
   US: { currencyCode: "USD" },
+  CA: { currencyCode: "CAD" },
 };
+
+export type SupportedMarketCode = keyof typeof supportedMarkets;
 
 let requestQueue: Promise<void> = Promise.resolve();
 let lastRequestAt = 0;
@@ -65,7 +68,7 @@ function normalizePlace(place: NominatimPlace): GeocodingResult | null {
   };
 }
 
-export async function searchLocations(query: string, countryCode: "PH" | "US"): Promise<GeocodingResult[]> {
+export async function searchLocations(query: string, countryCode: SupportedMarketCode): Promise<GeocodingResult[]> {
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("q", query);
   url.searchParams.set("countrycodes", countryCode.toLowerCase());

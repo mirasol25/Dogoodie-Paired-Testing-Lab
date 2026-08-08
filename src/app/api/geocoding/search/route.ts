@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
   }
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const country = request.nextUrl.searchParams.get("country")?.toUpperCase();
-  if (query.length < 3 || (country !== "PH" && country !== "US")) {
+  if (query.length < 3 || !(["PH", "US", "CA"] as const).some((code) => code === country)) {
     return NextResponse.json({ message: "Enter a location and select a supported search country." }, { status: 400 });
   }
   try {
-    return NextResponse.json({ results: await searchLocations(query, country) });
+    return NextResponse.json({ results: await searchLocations(query, country as "PH" | "US" | "CA") });
   } catch (error) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "Location search failed." }, { status: 502 });
   }

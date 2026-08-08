@@ -69,7 +69,7 @@ export const pinnedLocationSchema = z.object({
 
 export const createStudyWithRouteSchema = z.object({
   ...studyFieldsWithoutCode,
-  searchCountryCode: z.enum(["PH", "US"]),
+  searchCountryCode: z.enum(["PH", "US", "CA"]),
   routeName: z.string().trim().min(3, "Enter a route name.").max(160),
   pickup: pinnedLocationSchema,
   destination: pinnedLocationSchema,
@@ -77,8 +77,13 @@ export const createStudyWithRouteSchema = z.object({
   destinationInstructions: optionalText(500),
   routeNotes: optionalText(1000),
   platformServiceIds: z.array(z.string().uuid()).min(1, "Select at least one provider service."),
+  testerAServiceId: z.string().uuid("Select Tester A's provider and ride tier."),
+  testerBServiceId: z.string().uuid("Select Tester B's provider and ride tier."),
 }).superRefine((value, context) => {
   validateSchedule(value, context);
+  if (value.targetPairCount === null) {
+    context.addIssue({ code: "custom", path: ["targetPairCount"], message: "Enter the required number of usable pairs." });
+  }
   if (!value.studyQuestion || value.studyQuestion.length < 10) {
     context.addIssue({ code: "custom", path: ["studyQuestion"], message: "Enter a clear research question." });
   }
@@ -95,6 +100,10 @@ export const createStudyWithRouteSchema = z.object({
     && Math.abs(value.pickup.longitude - value.destination.longitude) < 0.000001;
   if (samePoint) {
     context.addIssue({ code: "custom", path: ["destination"], message: "Pickup and destination must be different locations." });
+  }
+  if (!value.platformServiceIds.includes(value.testerAServiceId)
+    || !value.platformServiceIds.includes(value.testerBServiceId)) {
+    context.addIssue({ code: "custom", path: ["platformServiceIds"], message: "Both tester services must be included in the study configuration." });
   }
 });
 

@@ -18,8 +18,9 @@ import { DiscardProtocolDraft } from "@/components/paired-testing/protocol/disca
 import { ProtocolDraftWorkspace } from "@/components/paired-testing/protocol/protocol-draft-workspace";
 import { ProtocolReadWorkspace } from "@/components/paired-testing/protocol/protocol-read-workspace";
 import { protocolAccessLabel } from "@/lib/auth/protocol-permissions";
+import { configuredStudyServiceSides, StudyServiceContext } from "@/components/paired-testing/shared/study-service-context";
 import type { Protocol } from "@/lib/data/protocols";
-import type { Study } from "@/lib/data/studies";
+import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 import type { AppRole } from "@/lib/data/profiles";
 
 function formatDate(value: string | null): string {
@@ -35,7 +36,7 @@ function ProtocolHistory({ protocols, selectedId }: { protocols: Protocol[]; sel
   );
 }
 
-export function ProtocolManager({ study, protocols, canManage, accessRole, selectedVersion, initialConfigureStep = "details" }: { study: Study; protocols: Protocol[]; canManage: boolean; accessRole: AppRole; selectedVersion?: string; initialConfigureStep?: "details" | "conditions" }) {
+export function ProtocolManager({ study, protocols, serviceOptions, canManage, accessRole, selectedVersion, initialConfigureStep = "details" }: { study: Study; protocols: Protocol[]; serviceOptions: ProviderServiceOption[]; canManage: boolean; accessRole: AppRole; selectedVersion?: string; initialConfigureStep?: "details" | "conditions" }) {
   const canEdit = canManage && !["completed", "archived"].includes(study.status);
   const activeProtocol = protocols.find((protocol) => protocol.status === "active") ?? null;
   const draftProtocol = protocols.find((protocol) => protocol.status === "draft") ?? null;
@@ -44,11 +45,14 @@ export function ProtocolManager({ study, protocols, canManage, accessRole, selec
   const currentProtocol = selectedProtocol ?? workingProtocol;
   const viewingSelectedVersion = Boolean(selectedVersion && selectedProtocol);
   const showCreateVersion = currentProtocol?.status === "active" && !draftProtocol && canEdit;
+  const serviceSides = configuredStudyServiceSides(study, serviceOptions);
+  const sideServicesDiffer = Boolean(serviceSides.testerA && serviceSides.testerB && serviceSides.testerA.id !== serviceSides.testerB.id);
   const history = <ProtocolHistory protocols={protocols} selectedId={currentProtocol?.id} />;
 
   return (
     <div className="space-y-6">
       <PageHeader eyebrow={`${study.study_code} - ${study.status}`} title="Testing Protocol" description={study.name} actions={showCreateVersion ? <CreateProtocolVersion studyId={study.id} protocolId={currentProtocol.id} version={currentProtocol.version} /> : undefined} />
+      <StudyServiceContext study={study} services={serviceOptions} />
 
       <div className="grid divide-y divide-border border-y border-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
         <div className="py-4 sm:px-4 sm:first:pl-0"><p className="text-[10px] text-muted-foreground">Active version</p><p className="mono mt-1 text-sm font-semibold">{activeProtocol?.version ?? "None"}</p></div>
@@ -62,7 +66,7 @@ export function ProtocolManager({ study, protocols, canManage, accessRole, selec
 
       {viewingSelectedVersion ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary/25 px-4 py-3"><p className="text-sm"><span className="font-medium">Viewing {currentProtocol?.version}.</span> {currentProtocol?.status === "superseded" ? " This historical version is read-only." : currentProtocol?.status === "active" ? " This is the currently active version." : " This is the current editable draft."}</p><Button asChild variant="outline" size="sm"><Link href="/paired-testing-demo/protocol"><ArrowLeft className="size-3.5" />Return to current protocol</Link></Button></div> : draftProtocol && activeProtocol ? <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3"><p className="text-sm"><span className="font-medium">Editing {draftProtocol.version} draft.</span> {activeProtocol.version} remains active until this draft is activated.</p></div> : null}
 
-      {!currentProtocol && canEdit ? <CreateProtocolDetails study={{ id: study.id, name: study.name, studyCode: study.study_code, studyQuestion: study.study_question, isolatedVariable: study.isolated_variable }} /> : null}
+      {!currentProtocol && canEdit ? <CreateProtocolDetails study={{ id: study.id, name: study.name, studyCode: study.study_code, studyQuestion: study.study_question, isolatedVariable: study.isolated_variable, testerAValue: sideServicesDiffer ? `${serviceSides.testerA?.platformName} · ${serviceSides.testerA?.serviceName}` : "", testerBValue: sideServicesDiffer ? `${serviceSides.testerB?.platformName} · ${serviceSides.testerB?.serviceName}` : "" }} /> : null}
       {!currentProtocol && !canEdit ? <section className="border-y border-border py-12 text-center"><FileCheck2 className="mx-auto size-6 text-muted-foreground" /><h2 className="mt-3 text-base font-semibold">No testing protocol yet</h2><p className="mt-2 text-sm text-muted-foreground">This study does not have a protocol available for review.</p></section> : null}
 
       {currentProtocol?.status === "draft" && canEdit && !viewingSelectedVersion ? <ProtocolDraftWorkspace

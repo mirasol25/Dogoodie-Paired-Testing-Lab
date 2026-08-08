@@ -38,10 +38,11 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
   const [studyType, setStudyType] = useState<"within_platform_pair" | "cross_platform_comparison">("within_platform_pair");
+  const [withinComparisonDesign, setWithinComparisonDesign] = useState<"same_tier" | "different_tier">("same_tier");
   const [studyQuestion, setStudyQuestion] = useState("");
   const [isolatedVariable, setIsolatedVariable] = useState("");
   const [targetPairCount, setTargetPairCount] = useState("");
-  const [searchCountry, setSearchCountry] = useState<"PH" | "US">("PH");
+  const [searchCountry, setSearchCountry] = useState<"PH" | "US" | "CA">("PH");
   const [testingStartsAt, setTestingStartsAt] = useState("");
   const [testingEndsAt, setTestingEndsAt] = useState("");
   const [scheduleMinimumBase, setScheduleMinimumBase] = useState<number | null>(null);
@@ -59,11 +60,13 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   const [locating, setLocating] = useState(false);
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([]);
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [testerAServiceId, setTesterAServiceId] = useState("");
+  const [testerBServiceId, setTesterBServiceId] = useState("");
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
 
   const marketProviders = useMemo(() => providerOptions.filter((option) => option.countryCode === (pickup?.countryCode ?? searchCountry)), [pickup, providerOptions, searchCountry]);
+  const selectedServices = useMemo(() => [...new Set([testerAServiceId, testerBServiceId].filter(Boolean))], [testerAServiceId, testerBServiceId]);
   const selectedProviderOptions = useMemo(() => providerOptions.filter((option) => selectedServices.includes(option.id)), [providerOptions, selectedServices]);
   const groupedProviders = useMemo(() => {
     const groups = new Map<string, { platformId: string; platformName: string; tiers: ProviderServiceOption[] }>();
@@ -75,7 +78,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     return [...groups.values()];
   }, [marketProviders]);
   const selectedProviderGroups = useMemo(() => groupedProviders.filter((provider) => selectedPlatformIds.includes(provider.platformId)), [groupedProviders, selectedPlatformIds]);
-  const selectedCrossCategory = studyType === "cross_platform_comparison" ? selectedProviderOptions[0]?.normalizedCategory : undefined;
+  const selectedCrossCategory = studyType === "cross_platform_comparison" ? providerOptions.find((option) => option.id === testerAServiceId)?.normalizedCategory : undefined;
   const awaitingReferenceTier = studyType === "cross_platform_comparison" && selectedPlatformIds.length === 1 && !selectedCrossCategory;
   const minimumTestingStart = scheduleMinimumBase === null
     ? undefined
@@ -90,7 +93,8 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
       if (name.trim().length < 3) nextErrors.name = "Enter a study name.";
       if (studyQuestion.trim().length < 10) nextErrors.studyQuestion = "Enter a clear research question.";
       if (isolatedVariable.trim().length < 2) nextErrors.isolatedVariable = "Enter the isolated variable.";
-      if (targetPairCount && (!Number.isInteger(Number(targetPairCount)) || Number(targetPairCount) <= 0)) nextErrors.targetPairCount = "Enter a positive whole number.";
+      if (!targetPairCount.trim()) nextErrors.targetPairCount = "Enter the required number of usable pairs.";
+      else if (!Number.isInteger(Number(targetPairCount)) || Number(targetPairCount) <= 0) nextErrors.targetPairCount = "Enter a positive whole number.";
     }
     if (index === 1) {
       if (!pickup) nextErrors.pickup = "Set the pickup pin.";
@@ -110,15 +114,16 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     }
     if (index === 2) {
       if (studyType === "within_platform_pair" && selectedPlatformIds.length !== 1) nextErrors.providers = "Select one provider.";
-      if (studyType === "cross_platform_comparison" && selectedPlatformIds.length < 2) nextErrors.providers = "Select at least two providers.";
-      const missingTierProvider = selectedProviderGroups.find((provider) => !provider.tiers.some((tier) => selectedServices.includes(tier.id)));
-      if (missingTierProvider) nextErrors.tiers = `Select one ${missingTierProvider.platformName} ride tier.`;
-      if (!selectedProviderOptions.length && !nextErrors.tiers) nextErrors.tiers = "Select at least one ride tier.";
-      if (selectedServices.length !== selectedPlatformIds.length) nextErrors.tiers = "Select exactly one ride tier for each provider.";
+      if (studyType === "cross_platform_comparison" && selectedPlatformIds.length !== 2) nextErrors.providers = "Select exactly two providers.";
+      if (!testerAServiceId) nextErrors.testerAServiceId = "Select Tester A's ride tier.";
+      if (!testerBServiceId) nextErrors.testerBServiceId = "Select Tester B's ride tier.";
       const categories = new Set(selectedProviderOptions.map((option) => option.normalizedCategory));
       const platforms = new Set(selectedProviderOptions.map((option) => option.platformId));
       if (studyType === "within_platform_pair" && platforms.size > 1) nextErrors.tiers = "Selected tiers must belong to one provider.";
+      if (studyType === "within_platform_pair" && withinComparisonDesign === "same_tier" && testerAServiceId && testerBServiceId && testerAServiceId !== testerBServiceId) nextErrors.tiers = "Same-tier comparisons require the same ride tier on both sides.";
+      if (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier" && testerAServiceId && testerBServiceId && testerAServiceId === testerBServiceId) nextErrors.tiers = "Different-tier comparisons require two different ride tiers.";
       if (studyType === "cross_platform_comparison" && categories.size > 1) nextErrors.tiers = "Cross-platform services must use the same ride tier category.";
+      if (studyType === "cross_platform_comparison" && platforms.size !== 2 && testerAServiceId && testerBServiceId) nextErrors.tiers = "Tester A and Tester B must use different providers.";
     }
     if (index === 3 && pickup) {
       const startsAt = testingStartsAt ? fromZonedTime(testingStartsAt, pickup.timezone) : null;
@@ -172,7 +177,10 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
       label: current?.label || result.formattedAddress.split(",")[0],
       isPublicLocation: current?.isPublicLocation ?? false,
     };
-    if (activeMode === "pickup") setPickup(point);
+    if (activeMode === "pickup") {
+      setPickup(point);
+      advanceToDestination();
+    }
     else {
       setDestination(point);
       if (!routeName.trim() && pickup) setRouteName(`${pickup.label} to ${point.label}`);
@@ -187,14 +195,17 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
       const response = await fetch(`/api/geocoding/reverse?lat=${latitude}&lng=${longitude}`);
       const payload = await response.json() as { result?: GeocodingResult; message?: string };
       if (!response.ok || !payload.result) throw new Error(payload.message);
-      if (payload.result.countryCode !== searchCountry) throw new Error(`The coordinates must be inside ${searchCountry === "PH" ? "the Philippines" : "the United States"}.`);
+      if (payload.result.countryCode !== searchCountry) throw new Error(`The coordinates must be inside ${{ PH: "the Philippines", US: "the United States", CA: "Canada" }[searchCountry]}.`);
       const current = mode === "pickup" ? pickup : destination;
       const point: DraftPoint = {
         ...payload.result,
         label: current?.label || payload.result.formattedAddress.split(",")[0],
         isPublicLocation: current?.isPublicLocation ?? false,
       };
-      if (mode === "pickup") setPickup(point);
+      if (mode === "pickup") {
+        setPickup(point);
+        advanceToDestination();
+      }
       else {
         setDestination(point);
         if (!routeName.trim() && pickup) setRouteName(`${pickup.label} to ${point.label}`);
@@ -256,35 +267,58 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 
   function changeStudyType(value: typeof studyType) {
     setStudyType(value);
+    setIsolatedVariable(value === "cross_platform_comparison" ? "Ride-hailing platform" : withinComparisonDesign === "different_tier" ? "Ride tier" : "");
     setSelectedPlatformIds([]);
-    setSelectedServices([]);
+    setTesterAServiceId("");
+    setTesterBServiceId("");
     setErrors({});
   }
 
-  function selectService(option: ProviderServiceOption) {
-    if (selectedCrossCategory && option.normalizedCategory !== selectedCrossCategory) return;
-    if (studyType === "cross_platform_comparison") {
-      const compatiblePlatformIds = new Set(groupedProviders.filter((provider) => provider.tiers.some((tier) => tier.normalizedCategory === option.normalizedCategory)).map((provider) => provider.platformId));
-      setSelectedPlatformIds((current) => current.filter((platformId) => compatiblePlatformIds.has(platformId)));
+  function advanceToDestination() {
+    if (destination) return;
+    setActiveMode("destination");
+    setCustomLatitude("");
+    setCustomLongitude("");
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  function selectSideService(side: "tester_a" | "tester_b", option: ProviderServiceOption) {
+    if (studyType === "cross_platform_comparison" && side === "tester_b" && selectedCrossCategory && option.normalizedCategory !== selectedCrossCategory) return;
+    if (studyType === "within_platform_pair" && withinComparisonDesign === "same_tier") {
+      setTesterAServiceId(option.id);
+      setTesterBServiceId(option.id);
+      setErrors({});
+      return;
     }
-    setSelectedServices((current) => {
-      const providerTierIds = new Set(providerOptions.filter((item) => item.platformId === option.platformId).map((item) => item.id));
-      const compatibleCurrent = studyType === "cross_platform_comparison"
-        ? current.filter((id) => providerOptions.find((item) => item.id === id)?.normalizedCategory === option.normalizedCategory)
-        : current;
-      return [...compatibleCurrent.filter((id) => !providerTierIds.has(id)), option.id];
-    });
+    if (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier") setIsolatedVariable("Ride tier");
+    if (side === "tester_a") {
+      setTesterAServiceId(option.id);
+      if (studyType === "cross_platform_comparison") setTesterBServiceId("");
+    } else {
+      setTesterBServiceId(option.id);
+    }
     setErrors({});
   }
 
   function selectWithinProvider(platformId: string) {
     setSelectedPlatformIds([platformId]);
-    setSelectedServices([]);
+    setTesterAServiceId("");
+    setTesterBServiceId("");
+    setErrors({});
+  }
+
+  function changeWithinComparisonDesign(value: "same_tier" | "different_tier") {
+    setWithinComparisonDesign(value);
+    setTesterAServiceId("");
+    setTesterBServiceId("");
+    setIsolatedVariable((current) => value === "different_tier" ? "Ride tier" : current === "Ride tier" ? "" : current);
     setErrors({});
   }
 
   function clearTierSelections() {
-    setSelectedServices([]);
+    setTesterAServiceId("");
+    setTesterBServiceId("");
     if (studyType === "cross_platform_comparison") setSelectedPlatformIds((current) => current.slice(0, 1));
     setErrors({});
   }
@@ -293,20 +327,21 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     const provider = groupedProviders.find((group) => group.platformId === platformId);
     if (checked && awaitingReferenceTier) return;
     if (checked && selectedCrossCategory && !provider?.tiers.some((tier) => tier.normalizedCategory === selectedCrossCategory)) return;
-    setSelectedPlatformIds((current) => checked ? [...current, platformId] : current.filter((id) => id !== platformId));
+    setSelectedPlatformIds((current) => checked ? [...current.filter((id) => id !== platformId), platformId].slice(0, 2) : current.filter((id) => id !== platformId));
     if (!checked) {
-      const tierIds = new Set(providerOptions.filter((option) => option.platformId === platformId).map((option) => option.id));
-      setSelectedServices((current) => current.filter((id) => !tierIds.has(id)));
+      if (providerOptions.find((option) => option.id === testerAServiceId)?.platformId === platformId) setTesterAServiceId("");
+      if (providerOptions.find((option) => option.id === testerBServiceId)?.platformId === platformId) setTesterBServiceId("");
     }
     setErrors({});
   }
 
-  function changeCountry(value: "PH" | "US") {
+  function changeCountry(value: "PH" | "US" | "CA") {
     setSearchCountry(value);
     setPickup(null);
     setDestination(null);
     setSelectedPlatformIds([]);
-    setSelectedServices([]);
+    setTesterAServiceId("");
+    setTesterBServiceId("");
     setSearchResults([]);
     setSearchQuery("");
     setCustomLatitude("");
@@ -332,7 +367,9 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
         testingEndsAt: testingEndsAt ? fromZonedTime(testingEndsAt, pickup.timezone).toISOString() : null,
         searchCountryCode: searchCountry, routeName, pickup, destination,
         pickupInstructions, destinationInstructions, routeNotes,
-        platformServiceIds: selectedServices,
+        platformServiceIds: [testerAServiceId, testerBServiceId],
+        testerAServiceId,
+        testerBServiceId,
       });
       if (result.ok) {
         toast.success(result.message);
@@ -371,22 +408,31 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 
       {step === 1 ? (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
-            <div className="w-full max-w-xs space-y-2"><Label htmlFor="search-country">Search country</Label><Select value={searchCountry} onValueChange={(value) => changeCountry(value as "PH" | "US")}><SelectTrigger id="search-country" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PH">Philippines</SelectItem><SelectItem value="US">United States</SelectItem></SelectContent></Select></div>
-            <div className="flex items-center gap-2"><Badge variant={pickup ? "secondary" : "outline"}>{pickup ? <Check className="size-3" /> : null}Pickup</Badge><Badge variant={destination ? "secondary" : "outline"}>{destination ? <Check className="size-3" /> : null}Destination</Badge></div>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-y border-border py-4">
+            <div><p className="text-sm font-semibold">Build the initial route</p><p className="mt-1 text-xs text-muted-foreground">Set both public locations in the same country. Currency and timezone come from the pinned route.</p></div>
+            <div className="flex items-center gap-2"><Badge variant={pickup ? "secondary" : "outline"}>{pickup ? <Check className="size-3" /> : null}Pickup {pickup ? "set" : "needed"}</Badge><Badge variant={destination ? "secondary" : "outline"}>{destination ? <Check className="size-3" /> : null}Destination {destination ? "set" : "needed"}</Badge></div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-            <div className="space-y-2"><Label>Location to set</Label><div className="grid grid-cols-2 rounded-md border border-border p-1">{(["pickup", "destination"] as const).map((mode) => <button key={mode} type="button" onClick={() => changeActiveMode(mode)} className={`h-9 text-xs font-medium capitalize ${activeMode === mode ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{mode === "pickup" ? <MapPin className="mr-1 inline size-3.5 text-primary" /> : <MapPin className="mr-1 inline size-3.5 text-amber-500" />}{mode}</button>)}</div></div>
-            <div className="space-y-2"><Label>Location entry</Label><div className="flex flex-wrap items-center gap-2"><div className="flex h-11 w-fit items-center gap-1 rounded-md border border-border p-1"><Button type="button" size="sm" variant={locationEntryMode === "search" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("search")}><Search className="size-4" />Search</Button><Button type="button" size="sm" variant={locationEntryMode === "coordinates" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("coordinates")}><LocateFixed className="size-4" />Coordinates</Button></div><Button type="button" size="sm" variant="outline" onClick={useCurrentLocation} disabled={locating || resolving}>{locating ? <LoaderCircle className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}{locating ? "Locating..." : `Use current location for ${activeMode}`}</Button></div></div>
+          <div className="grid items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <section className="space-y-5 border-y border-border py-4 lg:sticky lg:top-20">
+              <div className="space-y-2"><Label htmlFor="search-country">Search area</Label><Select value={searchCountry} onValueChange={(value) => changeCountry(value as "PH" | "US" | "CA")}><SelectTrigger id="search-country" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="PH">Philippines</SelectItem><SelectItem value="US">United States</SelectItem><SelectItem value="CA">Canada</SelectItem></SelectContent></Select><p className="text-[10px] leading-4 text-muted-foreground">Changing the country clears both route pins.</p></div>
+
+              <div className="space-y-2"><Label>Location to set</Label><div className="grid grid-cols-2 overflow-hidden rounded-md border border-border">{(["pickup", "destination"] as const).map((mode) => {
+                const point = mode === "pickup" ? pickup : destination;
+                return <button key={mode} type="button" onClick={() => changeActiveMode(mode)} className={`min-h-16 px-3 py-2 text-left transition-colors ${activeMode === mode ? "bg-primary/[0.08] text-foreground" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"}`}><span className="flex items-center gap-2 text-xs font-semibold capitalize">{mode === "pickup" ? <MapPin className="size-3.5 text-primary" /> : <MapPin className="size-3.5 text-amber-500" />}{mode}{point ? <Check className="ml-auto size-3.5 text-primary" /> : null}</span><span className="mt-1.5 block truncate text-[10px] font-normal text-muted-foreground">{point?.label ?? "Not set"}</span></button>;
+              })}</div></div>
+
+              <div className="space-y-3"><Label>Entry method</Label><div className="grid grid-cols-2 rounded-md border border-border p-1"><Button type="button" size="sm" variant={locationEntryMode === "search" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("search")}><Search className="size-4" />Search</Button><Button type="button" size="sm" variant={locationEntryMode === "coordinates" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("coordinates")}><LocateFixed className="size-4" />Coordinates</Button></div><Button type="button" className="w-full" variant="outline" onClick={useCurrentLocation} disabled={locating || resolving}>{locating ? <LoaderCircle className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}{locating ? "Locating..." : `Use current location for ${activeMode}`}</Button></div>
+
+              {locationEntryMode === "search" ? <div className="space-y-2"><Label htmlFor="route-location-search">Search {activeMode}</Label><div className="flex gap-2"><Input id="route-location-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} placeholder={`Search in ${{ PH: "the Philippines", US: "the United States", CA: "Canada" }[searchCountry]}`} /><Button type="button" size="icon" variant="outline" aria-label={`Search ${activeMode}`} title={`Search ${activeMode}`} onClick={() => void search()} disabled={searching || searchQuery.trim().length < 3}>{searching ? <LoaderCircle className="size-4 animate-spin" /> : <Search className="size-4" />}</Button></div></div> : null}
+
+              {locationEntryMode === "coordinates" ? <div className="space-y-3"><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="custom-latitude">Latitude</Label><Input id="custom-latitude" inputMode="decimal" value={customLatitude} onChange={(event) => setCustomLatitude(event.target.value)} placeholder="14.5995" /></div><div className="space-y-2"><Label htmlFor="custom-longitude">Longitude</Label><Input id="custom-longitude" inputMode="decimal" value={customLongitude} onChange={(event) => setCustomLongitude(event.target.value)} placeholder="120.9842" /></div></div><Button type="button" variant="outline" className="w-full" onClick={applyCustomCoordinates} disabled={resolving}><LocateFixed className="size-4" />Set {activeMode} coordinates</Button><FieldError message={errors.coordinates} /></div> : null}
+
+              {searchResults.length ? <div className="space-y-2"><p className="text-[10px] font-medium uppercase text-muted-foreground">Search results</p><div className="max-h-56 divide-y divide-border overflow-y-auto border-y border-border">{searchResults.map((result) => <button type="button" key={`${result.externalPlaceId}-${result.latitude}`} onClick={() => assignPoint(result)} className="flex w-full items-start gap-3 px-1 py-3 text-left text-xs hover:bg-secondary/50"><MapPin className="mt-0.5 size-4 shrink-0 text-primary" /><span className="leading-5">{result.formattedAddress}</span></button>)}</div></div> : null}
+            </section>
+
+            <div className="relative min-w-0"><StudyRouteMap countryCode={searchCountry} activeMode={activeMode} pickup={pickup} destination={destination} onCoordinatesChange={(mode, lat, lng) => void resolveCoordinates(mode, lat, lng)} /><span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-xs font-medium capitalize shadow-sm">{activeMode === "pickup" ? <MapPin className="size-3.5 text-primary" /> : <MapPin className="size-3.5 text-amber-500" />}Setting {activeMode}</span><span className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[10px] text-muted-foreground shadow-sm">Click the map or drag a pin</span>{resolving ? <span className="absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-background/90 px-2.5 py-1.5 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />Resolving location</span> : null}</div>
           </div>
-
-          {locationEntryMode === "search" ? <div className="grid gap-3 sm:grid-cols-[1fr_auto]"><Input aria-label={`Search ${activeMode} location`} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} placeholder={`Search ${activeMode} in ${searchCountry === "PH" ? "the Philippines" : "the United States"}`} /><Button type="button" variant="outline" onClick={() => void search()} disabled={searching || searchQuery.trim().length < 3}>{searching ? <LoaderCircle className="size-4 animate-spin" /> : <Search className="size-4" />}Search</Button></div> : null}
-
-          {locationEntryMode === "coordinates" ? <div className="grid gap-3 border-y border-border py-4 sm:grid-cols-[1fr_1fr_auto]"><div className="space-y-2"><Label htmlFor="custom-latitude">Latitude</Label><Input id="custom-latitude" inputMode="decimal" value={customLatitude} onChange={(event) => setCustomLatitude(event.target.value)} placeholder="14.5995" /></div><div className="space-y-2"><Label htmlFor="custom-longitude">Longitude</Label><Input id="custom-longitude" inputMode="decimal" value={customLongitude} onChange={(event) => setCustomLongitude(event.target.value)} placeholder="120.9842" /></div><Button type="button" variant="outline" className="self-end" onClick={applyCustomCoordinates} disabled={resolving}><LocateFixed className="size-4" />Set {activeMode}</Button><div className="sm:col-span-3"><FieldError message={errors.coordinates} /></div></div> : null}
-
-          {searchResults.length ? <div className="divide-y divide-border rounded-md border border-border">{searchResults.map((result) => <button type="button" key={`${result.externalPlaceId}-${result.latitude}`} onClick={() => assignPoint(result)} className="flex w-full items-start gap-3 p-3 text-left text-xs hover:bg-secondary"><MapPin className="mt-0.5 size-4 shrink-0 text-primary" /><span>{result.formattedAddress}</span></button>)}</div> : null}
-          <div className="relative"><StudyRouteMap countryCode={searchCountry} activeMode={activeMode} pickup={pickup} destination={destination} onCoordinatesChange={(mode, lat, lng) => void resolveCoordinates(mode, lat, lng)} /><span className="absolute left-3 top-3 rounded-md border border-border bg-background/90 px-2 py-1 text-xs font-medium capitalize shadow-sm">Setting {activeMode}</span>{resolving ? <span className="absolute bottom-3 left-3 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground">Resolving location...</span> : null}</div>
           <div className="grid gap-5 md:grid-cols-2">
             {(["pickup", "destination"] as const).map((mode) => {
               const point = mode === "pickup" ? pickup : destination;
@@ -400,16 +446,16 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 
       {step === 2 ? (
         <div className="space-y-6">
-          {pickup ? <Alert><AlertDescription>{studyType === "within_platform_pair" ? "Select one provider and one exact ride tier." : "Select a reference provider and its ride tier first. The system will then enable only providers with a comparable tier."} Availability is based on the {pickup.countryCode} pickup market.</AlertDescription></Alert> : null}
+          {pickup ? <Alert><AlertDescription>{studyType === "within_platform_pair" ? "Select one provider, then configure the ride tier for each tester side. The tiers may be the same or different." : "Select Tester A's reference provider and tier first, then choose one compatible provider and tier for Tester B."} Availability is based on the {pickup.countryCode} pickup market.</AlertDescription></Alert> : null}
 
           <section className="space-y-3">
-            <div><h3 className="text-sm font-semibold">1. Select {studyType === "within_platform_pair" ? "a provider" : "providers"}</h3><p className="mt-1 text-xs text-muted-foreground">Ride tiers become available after provider selection.</p></div>
+            <div><h3 className="text-sm font-semibold">1. Select {studyType === "within_platform_pair" ? "a provider" : "two providers"}</h3><p className="mt-1 text-xs text-muted-foreground">The first cross-platform provider is assigned to Tester A and the second to Tester B.</p></div>
             <div className="divide-y divide-border rounded-md border border-border">
               {groupedProviders.map((provider) => {
                 const selected = selectedPlatformIds.includes(provider.platformId);
                 const lacksComparableTier = Boolean(studyType === "cross_platform_comparison" && selectedCrossCategory && !provider.tiers.some((tier) => tier.normalizedCategory === selectedCrossCategory));
                 const waitingForTier = awaitingReferenceTier && !selected;
-                const providerDisabled = lacksComparableTier || waitingForTier;
+                const providerDisabled = lacksComparableTier || waitingForTier || (studyType === "cross_platform_comparison" && selectedPlatformIds.length >= 2 && !selected);
                 const categoryLabel = selectedCrossCategory?.replaceAll("_", " ");
                 return <label key={provider.platformId} className={`flex min-h-14 items-center gap-3 px-4 py-3 ${providerDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-secondary"}`}>{studyType === "within_platform_pair" ? <input type="radio" name="study-provider" checked={selected} onChange={() => selectWithinProvider(provider.platformId)} className="size-4 accent-primary" /> : <Checkbox disabled={providerDisabled} checked={selected} onCheckedChange={(checked) => toggleCrossProvider(provider.platformId, checked === true)} />}<span className="min-w-0 flex-1"><span className="block text-sm font-medium">{provider.platformName}</span><span className="block text-xs capitalize text-muted-foreground">{waitingForTier ? "Select the reference tier first" : lacksComparableTier ? `No ${categoryLabel} tier` : selectedCrossCategory ? `${categoryLabel} tier available` : `${provider.tiers.length} available ride ${provider.tiers.length === 1 ? "tier" : "tiers"}`}</span></span>{selected ? <Check className="size-4 text-primary" /> : null}</label>;
               })}
@@ -418,14 +464,20 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
           </section>
 
           <section className="space-y-3 border-t border-border pt-5">
-            <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">2. Select ride tier</h3><p className="mt-1 text-xs text-muted-foreground">Choose exactly one tier for every selected provider.{studyType === "cross_platform_comparison" ? " The reference tier controls which other providers and tiers are comparable." : " Both tester sides will use this exact tier."}</p></div>{selectedServices.length ? <Button type="button" size="sm" variant="ghost" onClick={clearTierSelections}>Clear tiers</Button> : null}</div>
-            {selectedProviderGroups.length ? <div className="space-y-5">{selectedProviderGroups.map((provider) => {
-              const selectedTierCount = provider.tiers.filter((tier) => selectedServices.includes(tier.id)).length;
-              return <div key={provider.platformId}><div className="mb-2 flex items-center justify-between"><h4 className="text-xs font-semibold uppercase text-muted-foreground">{provider.platformName}</h4><span className="text-xs text-muted-foreground">{selectedTierCount} selected</span></div><div className="grid gap-2 sm:grid-cols-2">{provider.tiers.map((tier) => {
-                const incompatible = Boolean(selectedCrossCategory && tier.normalizedCategory !== selectedCrossCategory);
-                return <label key={tier.id} className={`flex min-h-16 items-center gap-3 rounded-md border p-3 ${incompatible ? "cursor-not-allowed border-border opacity-50" : selectedServices.includes(tier.id) ? "cursor-pointer border-primary bg-primary/5" : "cursor-pointer border-border hover:bg-secondary"}`}><input type="radio" name={`ride-tier-${provider.platformId}`} disabled={incompatible} checked={selectedServices.includes(tier.id)} onChange={() => selectService(tier)} className="size-4 accent-primary" /><span className="min-w-0"><span className="block text-sm font-medium">{tier.serviceName}</span><span className="block text-xs capitalize text-muted-foreground">{tier.normalizedCategory.replaceAll("_", " ")}{incompatible ? " · Not comparable" : ""}</span></span></label>;
-              })}</div></div>;
-            })}</div> : <div className="border-y border-border py-8 text-center text-sm text-muted-foreground">Select {studyType === "within_platform_pair" ? "a provider" : "providers"} above to view ride tiers.</div>}
+            {studyType === "within_platform_pair" ? <div className="grid gap-2 sm:max-w-sm"><Label htmlFor="within-comparison-design">Comparison design</Label><Select value={withinComparisonDesign} onValueChange={(value) => changeWithinComparisonDesign(value as typeof withinComparisonDesign)}><SelectTrigger id="within-comparison-design" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="same_tier">Same ride tier</SelectItem><SelectItem value="different_tier">Different ride tiers</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">Choose different tiers only when the ride tier itself is the intended variable, such as Saver versus Standard.</p></div> : null}
+            <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">2. Configure each tester side</h3><p className="mt-1 text-xs text-muted-foreground">These services become locked study controls and are inherited by every assignment.</p></div>{selectedServices.length ? <Button type="button" size="sm" variant="ghost" onClick={clearTierSelections}>Clear tiers</Button> : null}</div>
+            {selectedPlatformIds.length ? <div className="grid gap-4 lg:grid-cols-2">{(["tester_a", "tester_b"] as const).map((side, sideIndex) => {
+              const platformId = studyType === "within_platform_pair" ? selectedPlatformIds[0] : selectedPlatformIds[sideIndex];
+              const provider = groupedProviders.find((group) => group.platformId === platformId);
+              const selectedId = side === "tester_a" ? testerAServiceId : testerBServiceId;
+              return <section key={side} className="rounded-md border border-border p-4"><div className="mb-3"><p className="text-[10px] font-medium uppercase text-primary">{side === "tester_a" ? "Tester A" : "Tester B"}</p><h4 className="mt-1 text-sm font-semibold">{provider?.platformName ?? (studyType === "cross_platform_comparison" ? "Select a provider" : "Provider unavailable")}</h4></div>{provider ? <div className="space-y-2">{provider.tiers.map((tier) => {
+                const incompatible = Boolean(
+                  (studyType === "cross_platform_comparison" && side === "tester_b" && selectedCrossCategory && tier.normalizedCategory !== selectedCrossCategory)
+                  || (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier" && (side === "tester_a" ? testerBServiceId : testerAServiceId) === tier.id)
+                );
+                return <label key={tier.id} className={`flex min-h-16 items-center gap-3 rounded-md border p-3 ${incompatible ? "cursor-not-allowed border-border opacity-50" : selectedId === tier.id ? "cursor-pointer border-primary bg-primary/5" : "cursor-pointer border-border hover:bg-secondary"}`}><input type="radio" name={`${side}-ride-tier`} disabled={incompatible} checked={selectedId === tier.id} onChange={() => selectSideService(side, tier)} className="size-4 accent-primary" /><span className="min-w-0"><span className="block text-sm font-medium">{tier.serviceName}</span><span className="block text-xs capitalize text-muted-foreground">{tier.normalizedCategory.replaceAll("_", " ")}{incompatible ? " · Not comparable" : ""}</span></span></label>;
+              })}</div> : <p className="py-6 text-center text-xs text-muted-foreground">Select {side === "tester_a" ? "the first" : "the second"} provider above.</p>}<FieldError message={errors[side === "tester_a" ? "testerAServiceId" : "testerBServiceId"]} /></section>;
+            })}</div> : <div className="border-y border-border py-8 text-center text-sm text-muted-foreground">Select {studyType === "within_platform_pair" ? "a provider" : "Tester A's provider"} above to configure ride tiers.</div>}
             <FieldError message={errors.tiers} />
             {!marketProviders.length ? <p className="text-sm text-muted-foreground">No provider services are configured for this pinned market yet.</p> : null}
           </section>

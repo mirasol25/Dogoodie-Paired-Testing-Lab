@@ -10,6 +10,7 @@ export type RoutePointMode = "pickup" | "destination";
 const countryViews = {
   PH: { center: [121.0, 14.6] as [number, number], zoom: 5.4 },
   US: { center: [-98.5, 39.5] as [number, number], zoom: 3.2 },
+  CA: { center: [-106.3, 56.1] as [number, number], zoom: 3.1 },
 };
 
 export function StudyRouteMap({
@@ -19,7 +20,7 @@ export function StudyRouteMap({
   destination,
   onCoordinatesChange,
 }: {
-  countryCode: "PH" | "US";
+  countryCode: "PH" | "US" | "CA";
   activeMode: RoutePointMode;
   pickup: GeocodingResult | null;
   destination: GeocodingResult | null;

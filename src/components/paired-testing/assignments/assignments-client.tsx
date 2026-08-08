@@ -98,13 +98,19 @@ function localInputValue(value: string | null, timezone: string) {
 }
 
 function AssignmentSetupDialog({ study, options, testers, capacity }: { study: Study; options: AssignmentSetupOptions; testers: AssignmentTesterOption[]; capacity: StudyCollectionCapacity }) {
-  const defaultService = options.services[0]?.id ?? "";
-  const defaultServiceDetails = options.services[0];
-  const defaultTesterBService = defaultServiceDetails
+  const configuration = study.configuration && typeof study.configuration === "object" && !Array.isArray(study.configuration)
+    ? study.configuration as Record<string, unknown>
+    : {};
+  const configuredTesterAService = typeof configuration.tester_a_service_id === "string" ? configuration.tester_a_service_id : "";
+  const configuredTesterBService = typeof configuration.tester_b_service_id === "string" ? configuration.tester_b_service_id : "";
+  const defaultService = options.services.some((service) => service.id === configuredTesterAService) ? configuredTesterAService : options.services[0]?.id ?? "";
+  const defaultServiceDetails = options.services.find((service) => service.id === defaultService);
+  const inferredTesterBService = defaultServiceDetails
     ? study.study_type === "cross_platform_comparison"
       ? options.services.find((service) => service.platformId !== defaultServiceDetails.platformId && service.normalizedCategory === defaultServiceDetails.normalizedCategory)?.id ?? ""
-      : options.services.find((service) => service.platformId === defaultServiceDetails.platformId && service.id !== defaultServiceDetails.id)?.id ?? defaultService
+      : defaultService
     : "";
+  const defaultTesterBService = options.services.some((service) => service.id === configuredTesterBService) ? configuredTesterBService : inferredTesterBService;
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [pending, startTransition] = useTransition();
@@ -230,8 +236,8 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
         </div>
         {routeId ? (() => { const route = options.routes.find((item) => item.id === routeId); return route ? <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2"><div className="border-b border-border p-3 sm:border-b-0 sm:border-r"><p className="text-[10px] uppercase text-muted-foreground">Pickup</p><p className="mt-1.5 text-xs font-medium">{route.pickup}</p></div><div className="p-3"><p className="text-[10px] uppercase text-muted-foreground">Destination</p><p className="mt-1.5 text-xs font-medium">{route.destination}</p></div></div> : null; })() : null}
         <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border">
-          <LockedField label={isCrossPlatform ? "Tester A provider and tier" : "Provider and ride tier"} value={testerAService ? `${testerAService.platformName} - ${testerAService.serviceName}` : "Unavailable"} detail={testerAService?.normalizedCategory.replaceAll("_", " ")} />
-          <LockedField label="Tester B provider and tier" value={options.services.find((service) => service.id === testerBServiceId) ? `${options.services.find((service) => service.id === testerBServiceId)?.platformName} - ${options.services.find((service) => service.id === testerBServiceId)?.serviceName}` : "Unavailable"} detail={isCrossPlatform ? testerAService?.normalizedCategory.replaceAll("_", " ") : "Same provider; assigned comparison service"} />
+          <LockedField label="Tester A provider and tier" value={testerAService ? `${testerAService.platformName} - ${testerAService.serviceName}` : "Unavailable"} detail={testerAService?.normalizedCategory.replaceAll("_", " ")} />
+          <LockedField label="Tester B provider and tier" value={options.services.find((service) => service.id === testerBServiceId) ? `${options.services.find((service) => service.id === testerBServiceId)?.platformName} - ${options.services.find((service) => service.id === testerBServiceId)?.serviceName}` : "Unavailable"} detail={isCrossPlatform ? testerAService?.normalizedCategory.replaceAll("_", " ") : testerAServiceId === testerBServiceId ? "Same provider and tier" : "Same provider; different ride tier"} />
         </div>
         </section>
         <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-sm font-semibold">Testing window</p><p className="mt-1 text-xs text-muted-foreground">One synchronized session per tester pair</p></div><div className="text-right"><p className="mono text-[10px] font-medium text-primary">{timezone}</p><p className="mt-1 text-[10px] text-muted-foreground">{currentStudyDateTime.replace("T", " ")}</p></div></div>
