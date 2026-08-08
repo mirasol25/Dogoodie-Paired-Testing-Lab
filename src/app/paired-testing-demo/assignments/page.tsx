@@ -7,6 +7,7 @@ import { getActiveStudy } from "@/lib/data/active-study";
 import { expireOverdueAssignments, getAssignmentSetupOptions, listStudyAssignments } from "@/lib/data/assignments";
 import { getStudyCollectionCapacity } from "@/lib/data/collection-capacity";
 import { listStudyMembers } from "@/lib/data/study-members";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function AssignmentsPage() {
   const identity = await requireRole(["test_coordinator", "tester"], "/paired-testing-demo/assignments");
@@ -34,6 +35,16 @@ export default async function AssignmentsPage() {
     canManage ? listStudyMembers(study.id) : Promise.resolve([]),
     getStudyCollectionCapacity(study.id),
   ]);
-  const testerOptions = members.filter((member) => member.study_role === "tester" && member.membership_status === "active").map((member) => ({ id: member.user_id, displayName: member.display_name?.trim() || member.email, email: member.email }));
+  const testerMembers = members.filter((member) => member.study_role === "tester" && member.membership_status === "active");
+  const supabase = await createClient();
+  const profileResult = testerMembers.length
+    ? await supabase.from("profiles").select("id,device_type,operating_system,operating_system_version").in("id", testerMembers.map((member) => member.user_id))
+    : { data: [], error: null };
+  if (profileResult.error) throw new Error("Tester device profiles could not be loaded.");
+  const profiles = new Map(profileResult.data.map((profile) => [profile.id, profile]));
+  const testerOptions = testerMembers.map((member) => {
+    const profile = profiles.get(member.user_id);
+    return { id: member.user_id, displayName: member.display_name?.trim() || member.email, email: member.email, deviceType: profile?.device_type ?? null, operatingSystem: profile?.operating_system ?? null, operatingSystemVersion: profile?.operating_system_version ?? null };
+  });
   return <AssignmentsClient study={study} assignments={assignments} setupOptions={setupOptions} testerOptions={testerOptions} canManage={canManage} capacity={capacity} />;
 }

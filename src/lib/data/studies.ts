@@ -230,5 +230,20 @@ export async function createStudyWithInitialRoute(
     throw new StudyDataError(error.message || "The study and route could not be created.", "DATABASE");
   }
   if (!data) throw new StudyDataError("The study was not returned after creation.", "DATABASE");
-  return data;
+  const configuration = data.configuration && typeof data.configuration === "object" && !Array.isArray(data.configuration)
+    ? data.configuration as Record<string, unknown>
+    : {};
+  const { data: configuredStudy, error: configurationError } = await supabase
+    .from("studies")
+    .update({ configuration: {
+      ...configuration,
+      device_comparison_design: parsed.data.deviceComparisonDesign,
+      tester_a_operating_system: parsed.data.testerAOperatingSystem,
+      tester_b_operating_system: parsed.data.testerBOperatingSystem,
+    } })
+    .eq("id", data.id)
+    .select()
+    .single();
+  if (configurationError || !configuredStudy) throw new StudyDataError(configurationError?.message || "The device comparison could not be saved.", "DATABASE");
+  return configuredStudy;
 }

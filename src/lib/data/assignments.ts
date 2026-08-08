@@ -60,6 +60,9 @@ export interface AssignmentTesterOption {
   id: string;
   displayName: string;
   email: string;
+  deviceType: string | null;
+  operatingSystem: string | null;
+  operatingSystemVersion: string | null;
 }
 
 export interface AssignmentSetupOptions {

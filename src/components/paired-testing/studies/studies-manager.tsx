@@ -62,6 +62,9 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([]);
   const [testerAServiceId, setTesterAServiceId] = useState("");
   const [testerBServiceId, setTesterBServiceId] = useState("");
+  const [deviceComparisonDesign, setDeviceComparisonDesign] = useState<"same_operating_system" | "different_operating_system">("same_operating_system");
+  const [testerAOperatingSystem, setTesterAOperatingSystem] = useState<"iOS" | "Android">("iOS");
+  const [testerBOperatingSystem, setTesterBOperatingSystem] = useState<"iOS" | "Android">("iOS");
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
 
@@ -124,6 +127,8 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
       if (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier" && testerAServiceId && testerBServiceId && testerAServiceId === testerBServiceId) nextErrors.tiers = "Different-tier comparisons require two different ride tiers.";
       if (studyType === "cross_platform_comparison" && categories.size > 1) nextErrors.tiers = "Cross-platform services must use the same ride tier category.";
       if (studyType === "cross_platform_comparison" && platforms.size !== 2 && testerAServiceId && testerBServiceId) nextErrors.tiers = "Tester A and Tester B must use different providers.";
+      if (deviceComparisonDesign === "same_operating_system" && testerAOperatingSystem !== testerBOperatingSystem) nextErrors.operatingSystems = "Select the same operating system for both tester sides.";
+      if (deviceComparisonDesign === "different_operating_system" && testerAOperatingSystem === testerBOperatingSystem) nextErrors.operatingSystems = "Select different operating systems for Tester A and Tester B.";
     }
     if (index === 3 && pickup) {
       const startsAt = testingStartsAt ? fromZonedTime(testingStartsAt, pickup.timezone) : null;
@@ -370,6 +375,9 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
         platformServiceIds: [testerAServiceId, testerBServiceId],
         testerAServiceId,
         testerBServiceId,
+        deviceComparisonDesign,
+        testerAOperatingSystem,
+        testerBOperatingSystem,
       });
       if (result.ok) {
         toast.success(result.message);
@@ -481,6 +489,15 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
             <FieldError message={errors.tiers} />
             {!marketProviders.length ? <p className="text-sm text-muted-foreground">No provider services are configured for this pinned market yet.</p> : null}
           </section>
+          <section className="space-y-4 border-t border-border pt-5">
+            <div><h3 className="text-sm font-semibold">3. Configure device condition</h3><p className="mt-1 text-xs text-muted-foreground">Lock each assignment side to the intended operating system. The default keeps both sides on the same OS.</p></div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2"><Label htmlFor="device-comparison-design">Device comparison</Label><Select value={deviceComparisonDesign} onValueChange={(value) => { const design = value as typeof deviceComparisonDesign; setDeviceComparisonDesign(design); if (design === "same_operating_system") setTesterBOperatingSystem(testerAOperatingSystem); else { setTesterAOperatingSystem("iOS"); setTesterBOperatingSystem("Android"); setIsolatedVariable("Operating system"); } setErrors({}); }}><SelectTrigger id="device-comparison-design" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="same_operating_system">Same operating system</SelectItem><SelectItem value="different_operating_system">iOS versus Android</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="tester-a-os">Tester A operating system</Label><Select value={testerAOperatingSystem} onValueChange={(value) => { const os = value as typeof testerAOperatingSystem; setTesterAOperatingSystem(os); if (deviceComparisonDesign === "same_operating_system") setTesterBOperatingSystem(os); setErrors({}); }}><SelectTrigger id="tester-a-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS">iOS</SelectItem><SelectItem value="Android">Android</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="tester-b-os">Tester B operating system</Label><Select value={testerBOperatingSystem} onValueChange={(value) => { setTesterBOperatingSystem(value as typeof testerBOperatingSystem); setErrors({}); }} disabled={deviceComparisonDesign === "same_operating_system"}><SelectTrigger id="tester-b-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS">iOS</SelectItem><SelectItem value="Android">Android</SelectItem></SelectContent></Select></div>
+            </div>
+            <FieldError message={errors.operatingSystems} />
+          </section>
         </div>
       ) : null}
 
@@ -493,6 +510,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
             <div><p className="text-xs text-muted-foreground">Providers</p><p className="mt-1 text-sm font-medium">{new Set(selectedProviderOptions.map((option) => option.platformId)).size}</p><p className="mt-1 text-xs text-muted-foreground">{selectedProviderOptions.length} selected services</p></div>
           </div>
           <div className="space-y-3"><h3 className="text-sm font-semibold">Provider and ride tiers</h3><div className="divide-y divide-border border-y border-border">{selectedProviderGroups.map((provider) => <div key={provider.platformId} className="grid gap-1 py-3 sm:grid-cols-[180px_1fr]"><p className="text-sm font-medium">{provider.platformName}</p><p className="text-xs leading-5 text-muted-foreground">{provider.tiers.filter((tier) => selectedServices.includes(tier.id)).map((tier) => tier.serviceName).join(", ")}</p></div>)}</div></div>
+          <div className="space-y-3"><h3 className="text-sm font-semibold">Device condition</h3><div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border"><div className="p-4"><p className="text-[10px] uppercase text-primary">Tester A</p><p className="mt-1 text-sm font-medium">{testerAOperatingSystem}</p></div><div className="p-4"><p className="text-[10px] uppercase text-amber-400">Tester B</p><p className="mt-1 text-sm font-medium">{testerBOperatingSystem}</p><p className="mt-1 text-xs text-muted-foreground">{deviceComparisonDesign === "different_operating_system" ? "Intentional OS comparison" : "Same OS control"}</p></div></div></div>
           <div className="grid gap-5 md:grid-cols-2">
             <div className="space-y-2"><Label htmlFor="testing-start">Testing starts</Label><Input id="testing-start" type="datetime-local" min={minimumTestingStart} value={testingStartsAt} onChange={(event) => { setTestingStartsAt(event.target.value); if (testingEndsAt && event.target.value >= testingEndsAt) setTestingEndsAt(""); setErrors({}); }} aria-invalid={Boolean(errors.schedule)} /></div>
             <div className="space-y-2"><Label htmlFor="testing-end">Testing ends</Label><Input id="testing-end" type="datetime-local" min={minimumTestingEnd} value={testingEndsAt} onChange={(event) => { setTestingEndsAt(event.target.value); setErrors({}); }} aria-invalid={Boolean(errors.schedule)} /></div>

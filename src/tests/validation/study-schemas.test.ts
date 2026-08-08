@@ -143,6 +143,23 @@ describe("initial route validation", () => {
     }).success).toBe(false);
   });
 
+  it("accepts an intentional iOS versus Android comparison", () => {
+    expect(createStudyWithRouteSchema.safeParse({
+      ...withoutStudyCode(validStudy),
+      isolatedVariable: "Operating system",
+      searchCountryCode: "PH",
+      routeName: "OS comparison route",
+      pickup,
+      destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
+      deviceComparisonDesign: "different_operating_system",
+      testerAOperatingSystem: "iOS",
+      testerBOperatingSystem: "Android",
+    }).success).toBe(true);
+  });
+
   it("rejects identical route pins and cross-currency routes", () => {
     expect(createStudyWithRouteSchema.safeParse({
       ...validStudy,

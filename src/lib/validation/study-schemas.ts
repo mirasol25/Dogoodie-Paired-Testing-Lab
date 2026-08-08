@@ -79,6 +79,9 @@ export const createStudyWithRouteSchema = z.object({
   platformServiceIds: z.array(z.string().uuid()).min(1, "Select at least one provider service."),
   testerAServiceId: z.string().uuid("Select Tester A's provider and ride tier."),
   testerBServiceId: z.string().uuid("Select Tester B's provider and ride tier."),
+  deviceComparisonDesign: z.enum(["same_operating_system", "different_operating_system"]).default("same_operating_system"),
+  testerAOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
+  testerBOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
 }).superRefine((value, context) => {
   validateSchedule(value, context);
   if (value.targetPairCount === null) {
@@ -104,6 +107,12 @@ export const createStudyWithRouteSchema = z.object({
   if (!value.platformServiceIds.includes(value.testerAServiceId)
     || !value.platformServiceIds.includes(value.testerBServiceId)) {
     context.addIssue({ code: "custom", path: ["platformServiceIds"], message: "Both tester services must be included in the study configuration." });
+  }
+  if (value.deviceComparisonDesign === "same_operating_system" && value.testerAOperatingSystem !== value.testerBOperatingSystem) {
+    context.addIssue({ code: "custom", path: ["testerBOperatingSystem"], message: "Same-OS comparisons require the same operating system on both sides." });
+  }
+  if (value.deviceComparisonDesign === "different_operating_system" && value.testerAOperatingSystem === value.testerBOperatingSystem) {
+    context.addIssue({ code: "custom", path: ["testerBOperatingSystem"], message: "OS comparisons require different operating systems." });
   }
 });
 

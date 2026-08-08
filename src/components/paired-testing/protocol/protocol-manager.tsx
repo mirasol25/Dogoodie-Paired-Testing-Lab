@@ -74,7 +74,7 @@ export function ProtocolManager({ study, protocols, serviceOptions, canManage, a
         initialConfigureStep={initialConfigureStep}
         discard={<DiscardProtocolDraft studyId={study.id} protocolId={currentProtocol.id} version={currentProtocol.version} hasActiveVersion={Boolean(activeProtocol)} />}
         details={<EditProtocolDetails protocol={currentProtocol} />}
-        conditions={<MatchingControlsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} />}
+        conditions={<MatchingControlsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} studyConfiguration={study.configuration} />}
         thresholds={<ValidationThresholdsForm studyId={study.id} protocolId={currentProtocol.id} configuration={currentProtocol.validation_configuration} />}
         requirements={<RequirementsForm studyId={study.id} protocolId={currentProtocol.id} evidenceRequirements={currentProtocol.evidence_requirements} validationConfiguration={currentProtocol.validation_configuration} fixedControls={currentProtocol.fixed_controls} />}
         exclusions={<ExclusionConditionsForm studyId={study.id} protocolId={currentProtocol.id} fixedControls={currentProtocol.fixed_controls} evidenceRequirements={currentProtocol.evidence_requirements} validationConfiguration={currentProtocol.validation_configuration} exclusionConditions={currentProtocol.exclusion_conditions} hasComparison={Boolean(activeProtocol)} />}
