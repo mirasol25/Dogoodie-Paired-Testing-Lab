@@ -49,16 +49,31 @@ describe("screenshot service validation", () => {
 
   it("resolves the Grab products displayed on the supplied cards", () => {
     const grabServices = [
-      { id: "grabcar", name: "GrabCar", service_code: "standard-car", metadata: { ocr_aliases: ["Standard Car"] } },
-      { id: "grab-fast", name: "Grab Fast", service_code: "fast-car", metadata: { ocr_aliases: ["Fast"] } },
-      { id: "grab-pet", name: "GrabCar Pet", service_code: "pet-friendly-car", metadata: { ocr_aliases: ["Standard Car Pet"] } },
+      { id: "grab-standard-4", name: "Standard - 4 Seater", service_code: "standard-car", metadata: { ocr_aliases: ["Standard Car"] } },
+      { id: "grab-standard-6", name: "Standard - 6 Seater", service_code: "six-seater", metadata: { ocr_aliases: ["Standard Car 6 Seater"] } },
+      { id: "grab-pet", name: "Standard - Pet", service_code: "pet-friendly-car", metadata: { ocr_aliases: ["Standard Car Pet"] } },
+      { id: "grab-saver", name: "Saver Car - 4 Seater", service_code: "saver-car", metadata: { ocr_aliases: ["Saver Car"] } },
+      { id: "grab-taxi", name: "Metered Taxi - 4 Seater", service_code: "metered-taxi", metadata: { ocr_aliases: ["Metered Taxi"] } },
     ];
 
-    expect(validateRequiredService("grab-fast", resolveScreenshotService(grabServices, "Fast").platformServiceId)).toBe("matched");
-    expect(validateRequiredService("grabcar", resolveScreenshotService(grabServices, "Standard Car &6").platformServiceId)).toBe("matched");
+    expect(validateRequiredService("grab-standard-6", resolveScreenshotService(grabServices, "Standard Car 6 Seater").platformServiceId)).toBe("matched");
     expect(validateRequiredService("grab-pet", resolveScreenshotService(grabServices, "Standard Car Pet").platformServiceId)).toBe("matched");
-    expect(validateRequiredService("grabcar", resolveScreenshotService(grabServices, "Standard Car &4").platformServiceId)).toBe("matched");
-    expect(validateRequiredService("grabcar", resolveScreenshotService(grabServices, "Fast").platformServiceId)).toBe("mismatched");
+    expect(validateRequiredService("grab-standard-4", resolveScreenshotService(grabServices, "Standard Car &4").platformServiceId)).toBe("matched");
+    expect(validateRequiredService("grab-saver", resolveScreenshotService(grabServices, "Saver Car").platformServiceId)).toBe("matched");
+    expect(validateRequiredService("grab-taxi", resolveScreenshotService(grabServices, "Metered Taxi").platformServiceId)).toBe("matched");
+  });
+
+  it("resolves the corrected inDrive categories", () => {
+    const services = [
+      { id: "indrive-4", name: "4 Seater", service_code: "standard-car", metadata: {} },
+      { id: "indrive-6", name: "6 Seater", service_code: "six-seater", metadata: {} },
+      { id: "indrive-comfort", name: "Comfort XL", service_code: "comfort-xl", metadata: {} },
+      { id: "indrive-taxi", name: "Taxi", service_code: "taxi", metadata: {} },
+    ];
+    expect(resolveScreenshotService(services, "4 Seater").platformServiceId).toBe("indrive-4");
+    expect(resolveScreenshotService(services, "6 Seater").platformServiceId).toBe("indrive-6");
+    expect(resolveScreenshotService(services, "Comfort XL").platformServiceId).toBe("indrive-comfort");
+    expect(resolveScreenshotService(services, "Taxi").platformServiceId).toBe("indrive-taxi");
   });
 
   it("distinguishes match, mismatch, and unverified", () => {

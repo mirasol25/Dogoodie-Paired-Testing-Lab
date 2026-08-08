@@ -1264,6 +1264,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      update_own_device_profile: {
+        Args: {
+          p_app_version: string
+          p_device_type: string
+          p_network_type: string
+          p_operating_system: string
+          p_operating_system_version: string
+        }
+        Returns: undefined
+      }
       admin_reopen_submission: {
         Args: { p_reason: string; p_submission_id: string }
         Returns: Database["public"]["Tables"]["submissions"]["Row"]

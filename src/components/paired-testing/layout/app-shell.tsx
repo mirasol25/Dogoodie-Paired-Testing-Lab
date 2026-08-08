@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, ClipboardCheck, Columns2, FileArchive, FileText, History,
-  ChevronRight, Home, LayoutDashboard, LogOut, Menu, ShieldCheck, Users,
+  ChevronRight, Home, LayoutDashboard, LogOut, Menu, ShieldCheck, UserRoundCog, Users,
 } from "lucide-react";
 import { signOutAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,11 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
             <Users className="size-3.5" />
             Manage accounts
           </Link>
+        </Button>
+      ) : null}
+      {!compact ? (
+        <Button asChild variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground hover:text-foreground">
+          <Link href="/paired-testing-demo/device-profile"><UserRoundCog className="size-3.5" />Device profile</Link>
         </Button>
       ) : null}
       <form action={signOutAction} className={cn(!compact && "mt-3")}>
