@@ -5,6 +5,8 @@ import { requireActiveUser } from "@/lib/auth/server";
 import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
 import { requireRole } from "@/lib/auth/server";
 import { ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
+import { createClient } from "@/lib/supabase/server";
+import { submissionDraftClientSchema } from "@/lib/validation/submission-schemas";
 
 export async function cancelAssignmentAction(assignmentId: string, reason: string): Promise<{ ok: boolean; message: string }> {
   await requireRole(["admin", "test_coordinator"], `/paired-testing-demo/assignments/${assignmentId}`);
@@ -48,9 +50,27 @@ export async function submitObservationAction(assignmentId: string): Promise<{ o
 }
 
 export async function saveSubmissionDraftAction(input: unknown): Promise<{ ok: boolean; message: string; submissionId?: string }> {
-  await requireActiveUser("/paired-testing-demo/assignments");
+  const identity = await requireActiveUser("/paired-testing-demo/assignments");
   try {
-    const submission = await saveSubmissionDraft(input as never);
+    const parsed = submissionDraftClientSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message || "The observation details are invalid." };
+
+    const supabase = await createClient();
+    const { data: deviceProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("device_type,operating_system,operating_system_version")
+      .eq("id", identity.user.id)
+      .maybeSingle();
+    if (profileError || !deviceProfile?.device_type || !deviceProfile.operating_system || !deviceProfile.operating_system_version) {
+      return { ok: false, message: "Complete your Device Profile before saving an observation." };
+    }
+
+    const submission = await saveSubmissionDraft({
+      ...parsed.data,
+      deviceType: deviceProfile.device_type,
+      operatingSystem: deviceProfile.operating_system,
+      operatingSystemVersion: deviceProfile.operating_system_version,
+    });
     revalidatePath("/paired-testing-demo/assignments");
     return { ok: true, message: `${submission.submission_code ?? submission.id} draft saved.`, submissionId: submission.id };
   } catch (error) {

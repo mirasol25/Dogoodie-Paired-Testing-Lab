@@ -16,4 +16,13 @@ export const submissionDraftSchema = z.object({
   notes: z.string().trim().max(1000).nullable().optional().transform((value) => value || null),
 });
 
+// Device model and OS details are account-level metadata. The observation UI
+// submits only session-specific values; the server adds these three fields
+// from the authenticated user's saved Device Profile.
+export const submissionDraftClientSchema = submissionDraftSchema.omit({
+  deviceType: true,
+  operatingSystem: true,
+  operatingSystemVersion: true,
+});
+
 export type SubmissionDraftInput = z.input<typeof submissionDraftSchema>;
