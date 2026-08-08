@@ -14,7 +14,7 @@ export default async function SetPasswordPage() {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
-      <section className="w-full max-w-md border-y border-border py-8">
+      <section className="w-full max-w-2xl border-y border-border py-8">
         <p className="label-kicker mb-3">Account invitation</p>
         <h1 className="text-2xl font-semibold text-foreground">Create your password</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">

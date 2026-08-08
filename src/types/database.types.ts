@@ -556,7 +556,18 @@ export type Database = {
           operating_system: string | null
           operating_system_version: string | null
           app_version: string | null
+          browser_language: string | null
+          browser_timezone: string | null
+          device_profile_created_at: string | null
+          ip_country_code: string | null
+          location_review_status: string
+          registration_ip: string | null
+          registration_latitude: number | null
+          registration_longitude: number | null
+          registration_user_agent: string | null
+          screen_size: string | null
           tester_country_code: string | null
+          tester_country_name: string | null
           updated_at: string
         }
         Insert: {
@@ -570,7 +581,18 @@ export type Database = {
           operating_system?: string | null
           operating_system_version?: string | null
           app_version?: string | null
+          browser_language?: string | null
+          browser_timezone?: string | null
+          device_profile_created_at?: string | null
+          ip_country_code?: string | null
+          location_review_status?: string
+          registration_ip?: string | null
+          registration_latitude?: number | null
+          registration_longitude?: number | null
+          registration_user_agent?: string | null
+          screen_size?: string | null
           tester_country_code?: string | null
+          tester_country_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -584,7 +606,18 @@ export type Database = {
           operating_system?: string | null
           operating_system_version?: string | null
           app_version?: string | null
+          browser_language?: string | null
+          browser_timezone?: string | null
+          device_profile_created_at?: string | null
+          ip_country_code?: string | null
+          location_review_status?: string
+          registration_ip?: string | null
+          registration_latitude?: number | null
+          registration_longitude?: number | null
+          registration_user_agent?: string | null
+          screen_size?: string | null
           tester_country_code?: string | null
+          tester_country_name?: string | null
           updated_at?: string
         }
         Relationships: []

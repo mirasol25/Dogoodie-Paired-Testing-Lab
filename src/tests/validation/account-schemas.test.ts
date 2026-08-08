@@ -24,6 +24,17 @@ describe("invitation password validation", () => {
     expect(setPasswordSchema.safeParse({
       password: "a-secure-password",
       confirmPassword: "a-secure-password",
+      latitude: "14.5995",
+      longitude: "120.9842",
+      networkType: "5G",
+      deviceType: "iPhone 15",
+      operatingSystem: "iOS",
+      operatingSystemVersion: "26",
+      appVersion: "1.1",
+      browserLanguage: "en-PH",
+      browserTimezone: "Asia/Manila",
+      screenSize: "1179x2556",
+      userAgent: "test browser",
     }).success).toBe(true);
     expect(setPasswordSchema.safeParse({
       password: "short",
