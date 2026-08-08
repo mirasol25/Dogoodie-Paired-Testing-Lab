@@ -43,9 +43,9 @@ function hasCanonicalControls(value: Json): boolean {
 
 export function MatchingControlsForm({ studyId, protocolId, fixedControls, studyConfiguration }: { studyId: string; protocolId: string; fixedControls: Json; studyConfiguration: Json }) {
   const configuration = studyConfiguration && typeof studyConfiguration === "object" && !Array.isArray(studyConfiguration) ? studyConfiguration : {};
-  const comparesOperatingSystems = "device_comparison_design" in configuration && configuration.device_comparison_design === "different_operating_system";
+  const restrictsOperatingSystems = "device_comparison_design" in configuration && ["same_operating_system", "different_operating_system"].includes(String(configuration.device_comparison_design));
   const configuredControls = readOptionalControls(fixedControls);
-  const initialControls = comparesOperatingSystems && !configuredControls.includes("operating_system_family") ? ["operating_system_family" as const, ...configuredControls] : configuredControls;
+  const initialControls = restrictsOperatingSystems && !configuredControls.includes("operating_system_family") ? ["operating_system_family" as const, ...configuredControls] : configuredControls;
   const [selected, setSelected] = useState<OptionalControlCode[]>(initialControls);
   const [saved, setSaved] = useState<OptionalControlCode[]>(initialControls);
   const [configured, setConfigured] = useState(hasCanonicalControls(fixedControls));
@@ -54,7 +54,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls, study
   const dirty = !configured || [...selected].sort().join(",") !== [...saved].sort().join(",");
 
   function toggle(code: OptionalControlCode, checked: boolean) {
-    if (comparesOperatingSystems && code === "operating_system_family") return;
+    if (restrictsOperatingSystems && code === "operating_system_family") return;
     setSelected((current) => checked ? [...current, code] : current.filter((item) => item !== code));
   }
 
@@ -76,7 +76,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls, study
 
       <div className="space-y-2"><h3 className="text-sm font-semibold">Required exact matches</h3><div className="divide-y divide-border rounded-md border border-border">{requiredControls.map(([label, detail]) => <div key={label} className="flex min-h-14 items-center gap-3 px-4 py-3"><Checkbox checked disabled /><ShieldCheck className="size-4 shrink-0 text-primary" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-muted-foreground">{detail}</span></span><Badge variant="outline">Exact</Badge></div>)}</div></div>
 
-      <div className="space-y-2"><h3 className="text-sm font-semibold">Optional technical matches</h3><div className="grid gap-2 md:grid-cols-2">{optionalControls.map((control) => { const lockedOsControl = comparesOperatingSystems && control.code === "operating_system_family"; return <label key={control.code} className={`flex min-h-16 items-center gap-3 rounded-md border p-3 ${lockedOsControl ? "cursor-default border-primary bg-primary/5" : selected.includes(control.code) ? "cursor-pointer border-primary bg-primary/5" : "cursor-pointer border-border hover:bg-secondary"}`}><Checkbox checked={selected.includes(control.code)} disabled={lockedOsControl} onCheckedChange={(checked) => toggle(control.code, checked === true)} /><span className="min-w-0"><span className="block text-sm font-medium">{control.label}</span><span className="block text-xs text-muted-foreground">{lockedOsControl ? "Required side check: Tester A and Tester B must each match the study-assigned OS" : control.detail}</span></span></label>; })}</div></div>
+      <div className="space-y-2"><h3 className="text-sm font-semibold">Optional technical matches</h3><div className="grid gap-2 md:grid-cols-2">{optionalControls.map((control) => { const lockedOsControl = restrictsOperatingSystems && control.code === "operating_system_family"; return <label key={control.code} className={`flex min-h-16 items-center gap-3 rounded-md border p-3 ${lockedOsControl ? "cursor-default border-primary bg-primary/5" : selected.includes(control.code) ? "cursor-pointer border-primary bg-primary/5" : "cursor-pointer border-border hover:bg-secondary"}`}><Checkbox checked={selected.includes(control.code)} disabled={lockedOsControl} onCheckedChange={(checked) => toggle(control.code, checked === true)} /><span className="min-w-0"><span className="block text-sm font-medium">{control.label}</span><span className="block text-xs text-muted-foreground">{lockedOsControl ? "Required side check: Tester A and Tester B must each match the study-assigned OS" : control.detail}</span></span></label>; })}</div></div>
 
       <div className="flex justify-end"><Button type="button" onClick={save} disabled={pending || !dirty}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Saving..." : "Save and continue"}</Button></div>
     </section>

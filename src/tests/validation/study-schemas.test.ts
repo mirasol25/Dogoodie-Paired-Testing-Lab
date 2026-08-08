@@ -143,6 +143,21 @@ describe("initial route validation", () => {
     }).success).toBe(false);
   });
 
+  it("requires both testing dates for the complete study workflow", () => {
+    expect(createStudyWithRouteSchema.safeParse({
+      ...withoutStudyCode(validStudy),
+      testingStartsAt: null,
+      testingEndsAt: null,
+      searchCountryCode: "PH",
+      routeName: "Manila public route",
+      pickup,
+      destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
+    }).success).toBe(false);
+  });
+
   it("accepts an intentional iOS versus Android comparison", () => {
     expect(createStudyWithRouteSchema.safeParse({
       ...withoutStudyCode(validStudy),

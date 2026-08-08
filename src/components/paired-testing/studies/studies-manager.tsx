@@ -4,9 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { Archive, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Play, Plus, Search, Users } from "lucide-react";
+import { Archive, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Pencil, Play, Plus, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { createStudyAction, extendStudyTestingPeriodAction, selectStudyAction, transitionStudyStatusAction } from "@/app/paired-testing-demo/studies/actions";
+import { createStudyAction, deleteDraftStudyAction, extendStudyTestingPeriodAction, selectStudyAction, transitionStudyStatusAction, updateFullDraftStudyAction } from "@/app/paired-testing-demo/studies/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,50 +21,62 @@ import { Textarea } from "@/components/ui/textarea";
 import { StudyRouteMap, type RoutePointMode } from "@/components/paired-testing/studies/study-route-map";
 import { configuredStudyServices } from "@/components/paired-testing/shared/study-service-context";
 import type { GeocodingResult } from "@/lib/geocoding/types";
-import type { ProviderServiceOption, Study, StudyCompletionReadiness } from "@/lib/data/studies";
+import type { ProviderServiceOption, Study, StudyCompletionReadiness, StudyEditorInitialData } from "@/lib/data/studies";
 import type { AppRole } from "@/lib/data/profiles";
 
 type DraftPoint = GeocodingResult & { label: string; isPublicLocation: boolean };
-const stepLabels = ["Details", "Initial route", "Providers", "Review & schedule"];
+const stepLabels = ["Study design", "Initial route", "Test conditions", "Schedule & review"];
+const stepDescriptions = [
+  "Define the question and target",
+  "Set pickup and destination",
+  "Lock service and device controls",
+  "Set dates and confirm",
+];
 
 function FieldError({ message }: { message?: string }) {
   return message ? <p className="text-xs text-destructive">{message}</p> : null;
 }
 
-function CreateStudyForm({ providerOptions }: { providerOptions: ProviderServiceOption[] }) {
+export function CreateStudyForm({ providerOptions, initialData }: { providerOptions: ProviderServiceOption[]; initialData?: StudyEditorInitialData }) {
   const router = useRouter();
+  const initialConfiguration = initialData?.study.configuration && typeof initialData.study.configuration === "object" && !Array.isArray(initialData.study.configuration) ? initialData.study.configuration as Record<string, unknown> : {};
+  const initialServiceA = typeof initialConfiguration.tester_a_service_id === "string" ? initialConfiguration.tester_a_service_id : "";
+  const initialServiceB = typeof initialConfiguration.tester_b_service_id === "string" ? initialConfiguration.tester_b_service_id : initialServiceA;
+  const initialDeviceDesign = initialConfiguration.device_comparison_design === "same_operating_system" || initialConfiguration.device_comparison_design === "different_operating_system" ? initialConfiguration.device_comparison_design : "same_operating_system";
+  const toDraftPoint = (location: StudyEditorInitialData["pickup"]): DraftPoint => ({ label: location.label, formattedAddress: location.formatted_address, latitude: location.latitude, longitude: location.longitude, countryCode: location.country_code, regionName: location.region_name, currencyCode: location.currency_code, timezone: location.timezone, geocodingProvider: "nominatim", externalPlaceId: location.external_place_id, isPublicLocation: location.is_public_location });
   const [step, setStep] = useState(0);
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [name, setName] = useState("");
-  const [studyType, setStudyType] = useState<"within_platform_pair" | "cross_platform_comparison">("within_platform_pair");
-  const [withinComparisonDesign, setWithinComparisonDesign] = useState<"same_tier" | "different_tier">("same_tier");
-  const [studyQuestion, setStudyQuestion] = useState("");
-  const [isolatedVariable, setIsolatedVariable] = useState("");
-  const [targetPairCount, setTargetPairCount] = useState("");
-  const [searchCountry, setSearchCountry] = useState<"PH" | "US" | "CA">("PH");
-  const [testingStartsAt, setTestingStartsAt] = useState("");
-  const [testingEndsAt, setTestingEndsAt] = useState("");
+  const [name, setName] = useState(initialData?.study.name ?? "");
+  const [studyType, setStudyType] = useState<"within_platform_pair" | "cross_platform_comparison">(initialData?.study.study_type ?? "within_platform_pair");
+  const [withinComparisonDesign, setWithinComparisonDesign] = useState<"same_tier" | "different_tier">(initialServiceA && initialServiceB && initialServiceA !== initialServiceB ? "different_tier" : "same_tier");
+  const [studyQuestion, setStudyQuestion] = useState(initialData?.study.study_question ?? "");
+  const [isolatedVariable, setIsolatedVariable] = useState(initialData?.study.isolated_variable ?? "");
+  const [targetPairCount, setTargetPairCount] = useState(String(initialData?.study.target_pair_count ?? ""));
+  const [searchCountry, setSearchCountry] = useState<"PH" | "US" | "CA">((initialData?.pickup.country_code as "PH" | "US" | "CA" | undefined) ?? "PH");
+  const [testingStartsAt, setTestingStartsAt] = useState(initialData?.study.testing_starts_at ? formatInTimeZone(new Date(initialData.study.testing_starts_at), initialData.study.display_timezone, "yyyy-MM-dd'T'HH:mm") : "");
+  const [testingEndsAt, setTestingEndsAt] = useState(initialData?.study.testing_ends_at ? formatInTimeZone(new Date(initialData.study.testing_ends_at), initialData.study.display_timezone, "yyyy-MM-dd'T'HH:mm") : "");
   const [scheduleMinimumBase, setScheduleMinimumBase] = useState<number | null>(null);
-  const [routeName, setRouteName] = useState("");
-  const [pickupInstructions, setPickupInstructions] = useState("");
-  const [destinationInstructions, setDestinationInstructions] = useState("");
-  const [routeNotes, setRouteNotes] = useState("");
+  const [routeName, setRouteName] = useState(initialData?.route.route_name ?? "");
+  const [pickupInstructions, setPickupInstructions] = useState(initialData?.route.pickup_instructions ?? "");
+  const [destinationInstructions, setDestinationInstructions] = useState(initialData?.route.destination_instructions ?? "");
+  const [routeNotes, setRouteNotes] = useState(initialData?.route.notes ?? "");
   const [activeMode, setActiveMode] = useState<RoutePointMode>("pickup");
   const [locationEntryMode, setLocationEntryMode] = useState<"search" | "coordinates">("search");
-  const [pickup, setPickup] = useState<DraftPoint | null>(null);
-  const [destination, setDestination] = useState<DraftPoint | null>(null);
+  const [pickup, setPickup] = useState<DraftPoint | null>(initialData ? toDraftPoint(initialData.pickup) : null);
+  const [destination, setDestination] = useState<DraftPoint | null>(initialData ? toDraftPoint(initialData.destination) : null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [locating, setLocating] = useState(false);
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
-  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([]);
-  const [testerAServiceId, setTesterAServiceId] = useState("");
-  const [testerBServiceId, setTesterBServiceId] = useState("");
-  const [deviceComparisonDesign, setDeviceComparisonDesign] = useState<"same_operating_system" | "different_operating_system">("same_operating_system");
-  const [testerAOperatingSystem, setTesterAOperatingSystem] = useState<"iOS" | "Android">("iOS");
-  const [testerBOperatingSystem, setTesterBOperatingSystem] = useState<"iOS" | "Android">("iOS");
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>(() => [...new Set([initialServiceA, initialServiceB].filter(Boolean).map((id) => providerOptions.find((option) => option.id === id)?.platformId).filter((id): id is string => Boolean(id)))]);
+  const [testerAServiceId, setTesterAServiceId] = useState(initialServiceA);
+  const [testerBServiceId, setTesterBServiceId] = useState(initialServiceB);
+  const [deviceRestrictionEnabled, setDeviceRestrictionEnabled] = useState(initialConfiguration.device_comparison_design === "same_operating_system" || initialConfiguration.device_comparison_design === "different_operating_system");
+  const [deviceComparisonDesign, setDeviceComparisonDesign] = useState<"same_operating_system" | "different_operating_system">(initialDeviceDesign);
+  const [testerAOperatingSystem, setTesterAOperatingSystem] = useState<"iOS" | "Android">(initialConfiguration.tester_a_operating_system === "Android" ? "Android" : "iOS");
+  const [testerBOperatingSystem, setTesterBOperatingSystem] = useState<"iOS" | "Android">(initialConfiguration.tester_b_operating_system === "Android" ? "Android" : "iOS");
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
 
@@ -81,6 +93,8 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     return [...groups.values()];
   }, [marketProviders]);
   const selectedProviderGroups = useMemo(() => groupedProviders.filter((provider) => selectedPlatformIds.includes(provider.platformId)), [groupedProviders, selectedPlatformIds]);
+  const selectedWithinProvider = studyType === "within_platform_pair" ? selectedProviderGroups[0] : undefined;
+  const selectedWithinProviderHasMultipleTiers = (selectedWithinProvider?.tiers.length ?? 0) >= 2;
   const selectedCrossCategory = studyType === "cross_platform_comparison" ? providerOptions.find((option) => option.id === testerAServiceId)?.normalizedCategory : undefined;
   const awaitingReferenceTier = studyType === "cross_platform_comparison" && selectedPlatformIds.length === 1 && !selectedCrossCategory;
   const minimumTestingStart = scheduleMinimumBase === null
@@ -127,13 +141,15 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
       if (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier" && testerAServiceId && testerBServiceId && testerAServiceId === testerBServiceId) nextErrors.tiers = "Different-tier comparisons require two different ride tiers.";
       if (studyType === "cross_platform_comparison" && categories.size > 1) nextErrors.tiers = "Cross-platform services must use the same ride tier category.";
       if (studyType === "cross_platform_comparison" && platforms.size !== 2 && testerAServiceId && testerBServiceId) nextErrors.tiers = "Tester A and Tester B must use different providers.";
-      if (deviceComparisonDesign === "same_operating_system" && testerAOperatingSystem !== testerBOperatingSystem) nextErrors.operatingSystems = "Select the same operating system for both tester sides.";
-      if (deviceComparisonDesign === "different_operating_system" && testerAOperatingSystem === testerBOperatingSystem) nextErrors.operatingSystems = "Select different operating systems for Tester A and Tester B.";
+      if (deviceRestrictionEnabled && deviceComparisonDesign === "same_operating_system" && testerAOperatingSystem !== testerBOperatingSystem) nextErrors.operatingSystems = "Select the same operating system for both tester sides.";
+      if (deviceRestrictionEnabled && deviceComparisonDesign === "different_operating_system" && testerAOperatingSystem === testerBOperatingSystem) nextErrors.operatingSystems = "Select different operating systems for Tester A and Tester B.";
     }
     if (index === 3 && pickup) {
       const startsAt = testingStartsAt ? fromZonedTime(testingStartsAt, pickup.timezone) : null;
       const endsAt = testingEndsAt ? fromZonedTime(testingEndsAt, pickup.timezone) : null;
-      if (startsAt && startsAt < new Date()) nextErrors.schedule = "Testing cannot start in the past.";
+      if (!startsAt) nextErrors.testingStartsAt = "Select when testing starts.";
+      if (!endsAt) nextErrors.testingEndsAt = "Select when testing ends.";
+      if (startsAt && startsAt < new Date()) nextErrors.testingStartsAt = "Testing cannot start in the past.";
       else if (startsAt && endsAt && endsAt <= startsAt) nextErrors.schedule = "Testing must end after it starts.";
     }
     setErrors(nextErrors);
@@ -307,9 +323,14 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   }
 
   function selectWithinProvider(platformId: string) {
+    const provider = groupedProviders.find((group) => group.platformId === platformId);
     setSelectedPlatformIds([platformId]);
     setTesterAServiceId("");
     setTesterBServiceId("");
+    if ((provider?.tiers.length ?? 0) < 2) {
+      setWithinComparisonDesign("same_tier");
+      setIsolatedVariable((current) => current === "Ride tier" ? "" : current);
+    }
     setErrors({});
   }
 
@@ -363,7 +384,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
     }
     if (!pickup || !destination) return;
     startTransition(async () => {
-      const result = await createStudyAction({
+      const payload = {
         name, studyType, studyQuestion, isolatedVariable,
         targetPairCount: targetPairCount ? Number(targetPairCount) : null,
         defaultCurrency: pickup.currencyCode,
@@ -375,13 +396,17 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
         platformServiceIds: [testerAServiceId, testerBServiceId],
         testerAServiceId,
         testerBServiceId,
-        deviceComparisonDesign,
+        deviceComparisonDesign: deviceRestrictionEnabled ? deviceComparisonDesign : "uncontrolled",
         testerAOperatingSystem,
         testerBOperatingSystem,
-      });
+      };
+      const result = initialData ? await updateFullDraftStudyAction(initialData.study.id, payload) : await createStudyAction(payload);
       if (result.ok) {
         toast.success(result.message);
-        if (result.studyId) {
+        if (initialData) {
+          router.push("/paired-testing-demo/studies");
+          router.refresh();
+        } else if (result.studyId) {
           router.push(`/paired-testing-demo/studies/${result.studyId}/members`);
           router.refresh();
         }
@@ -390,14 +415,24 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-2 border-b border-border pb-4 sm:grid-cols-4">
+    <div className="space-y-7">
+      <div className="overflow-hidden rounded-md border border-border bg-secondary/10">
+        <div className="grid grid-cols-2 sm:grid-cols-4">
         {stepLabels.map((label, index) => (
-          <button key={label} type="button" onClick={() => goToStep(index)} className={`h-9 border-b-2 text-xs font-medium ${step === index ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-            {index + 1}. {label}
+          <button key={label} type="button" onClick={() => goToStep(index)} className={`min-h-20 border-b-2 px-3 py-3 text-left transition-colors sm:min-h-24 ${step === index ? "border-primary bg-primary/[0.06]" : "border-transparent hover:bg-secondary/50"}`} aria-current={step === index ? "step" : undefined}>
+            <span className="flex items-center gap-2 text-xs font-semibold"><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index < step ? "border-primary bg-primary text-primary-foreground" : step === index ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>{index < step ? <Check className="size-3.5" /> : index + 1}</span><span className={step === index ? "text-foreground" : "text-muted-foreground"}>{label}</span></span>
+            <span className="mt-2 hidden text-[10px] leading-4 text-muted-foreground sm:block">{stepDescriptions[index]}</span>
           </button>
         ))}
+        </div>
       </div>
+
+      <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+        <div><p className="text-[10px] font-medium uppercase text-primary">Step {step + 1} of {stepLabels.length}</p><h2 className="mt-1 text-lg font-semibold">{stepLabels[step]}</h2><p className="mt-1 text-xs text-muted-foreground">{stepDescriptions[step]}</p></div>
+        <span className="text-xs text-muted-foreground">{Math.round(((step + 1) / stepLabels.length) * 100)}%</span>
+      </div>
+
+      {Object.keys(errors).length ? <Alert variant="destructive"><AlertDescription>Review the highlighted fields before continuing.</AlertDescription></Alert> : null}
 
       {step === 0 ? (
         <div className="grid gap-5 md:grid-cols-2">
@@ -407,10 +442,10 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
             <FieldError message={errors.name} />
             <p className="text-xs text-muted-foreground">The study code will be assigned automatically after the route country is validated.</p>
           </div>
-          <div className="space-y-2"><Label htmlFor="study-type">Study mode</Label><Select value={studyType} onValueChange={(value) => changeStudyType(value as typeof studyType)}><SelectTrigger id="study-type" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="within_platform_pair">Within-platform paired testing</SelectItem><SelectItem value="cross_platform_comparison">Cross-platform comparison</SelectItem></SelectContent></Select></div>
+          <div className="space-y-2"><Label htmlFor="study-type">Study mode</Label><Select value={studyType} onValueChange={(value) => changeStudyType(value as typeof studyType)}><SelectTrigger id="study-type" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="within_platform_pair">Within-platform paired testing</SelectItem><SelectItem value="cross_platform_comparison">Cross-platform comparison</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">Within-platform uses one provider. Cross-platform compares equivalent services from two providers.</p></div>
           <div className="space-y-2"><Label htmlFor="target-pairs">Target pair count</Label><Input id="target-pairs" type="number" min="1" value={targetPairCount} onChange={(event) => setTargetPairCount(event.target.value)} aria-invalid={Boolean(errors.targetPairCount)} /><FieldError message={errors.targetPairCount} /></div>
-          <div className="space-y-2 md:col-span-2"><Label htmlFor="study-question">Research question</Label><Textarea id="study-question" value={studyQuestion} onChange={(event) => setStudyQuestion(event.target.value)} aria-invalid={Boolean(errors.studyQuestion)} /><FieldError message={errors.studyQuestion} /></div>
-          <div className="space-y-2 md:col-span-2"><Label htmlFor="isolated-variable">Isolated variable</Label><Input id="isolated-variable" value={isolatedVariable} onChange={(event) => setIsolatedVariable(event.target.value)} aria-invalid={Boolean(errors.isolatedVariable)} /><FieldError message={errors.isolatedVariable} /></div>
+          <div className="space-y-2 md:col-span-2"><Label htmlFor="isolated-variable">Isolated variable</Label><Input id="isolated-variable" value={isolatedVariable} onChange={(event) => setIsolatedVariable(event.target.value)} placeholder="Example: Account type" aria-invalid={Boolean(errors.isolatedVariable)} /><p className="text-xs text-muted-foreground">Enter the primary condition intentionally different between Tester A and Tester B.</p><FieldError message={errors.isolatedVariable} /></div>
+          <div className="space-y-2 md:col-span-2"><Label htmlFor="study-question">Research question</Label><Textarea id="study-question" value={studyQuestion} onChange={(event) => setStudyQuestion(event.target.value)} placeholder="Example: Do Pro and Standard accounts receive different fares for the same controlled trip?" className="min-h-24" aria-invalid={Boolean(errors.studyQuestion)} /><FieldError message={errors.studyQuestion} /></div>
         </div>
       ) : null}
 
@@ -472,7 +507,7 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
           </section>
 
           <section className="space-y-3 border-t border-border pt-5">
-            {studyType === "within_platform_pair" ? <div className="grid gap-2 sm:max-w-sm"><Label htmlFor="within-comparison-design">Comparison design</Label><Select value={withinComparisonDesign} onValueChange={(value) => changeWithinComparisonDesign(value as typeof withinComparisonDesign)}><SelectTrigger id="within-comparison-design" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="same_tier">Same ride tier</SelectItem><SelectItem value="different_tier">Different ride tiers</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">Choose different tiers only when the ride tier itself is the intended variable, such as Saver versus Standard.</p></div> : null}
+            {studyType === "within_platform_pair" ? <div className="grid gap-2 sm:max-w-sm"><Label htmlFor="within-comparison-design">Ride-tier setup</Label><Select value={withinComparisonDesign} onValueChange={(value) => changeWithinComparisonDesign(value as typeof withinComparisonDesign)} disabled={!selectedWithinProvider}><SelectTrigger id="within-comparison-design" className="w-full"><SelectValue placeholder="Select a provider first" /></SelectTrigger><SelectContent><SelectItem value="same_tier">Same ride tier</SelectItem><SelectItem value="different_tier" disabled={!selectedWithinProviderHasMultipleTiers}>Different ride tiers</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">{!selectedWithinProvider ? "Select a provider before choosing the ride-tier setup." : selectedWithinProviderHasMultipleTiers ? "Use the same tier when another condition, such as account type, is the isolated variable." : `${selectedWithinProvider.platformName} has only one available ride tier, so both tester sides must use it.`}</p></div> : null}
             <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">2. Configure each tester side</h3><p className="mt-1 text-xs text-muted-foreground">These services become locked study controls and are inherited by every assignment.</p></div>{selectedServices.length ? <Button type="button" size="sm" variant="ghost" onClick={clearTierSelections}>Clear tiers</Button> : null}</div>
             {selectedPlatformIds.length ? <div className="grid gap-4 lg:grid-cols-2">{(["tester_a", "tester_b"] as const).map((side, sideIndex) => {
               const platformId = studyType === "within_platform_pair" ? selectedPlatformIds[0] : selectedPlatformIds[sideIndex];
@@ -490,12 +525,12 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
             {!marketProviders.length ? <p className="text-sm text-muted-foreground">No provider services are configured for this pinned market yet.</p> : null}
           </section>
           <section className="space-y-4 border-t border-border pt-5">
-            <div><h3 className="text-sm font-semibold">3. Configure device condition</h3><p className="mt-1 text-xs text-muted-foreground">Lock each assignment side to the intended operating system. The default keeps both sides on the same OS.</p></div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2"><Label htmlFor="device-comparison-design">Device comparison</Label><Select value={deviceComparisonDesign} onValueChange={(value) => { const design = value as typeof deviceComparisonDesign; setDeviceComparisonDesign(design); if (design === "same_operating_system") setTesterBOperatingSystem(testerAOperatingSystem); else { setTesterAOperatingSystem("iOS"); setTesterBOperatingSystem("Android"); setIsolatedVariable("Operating system"); } setErrors({}); }}><SelectTrigger id="device-comparison-design" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="same_operating_system">Same operating system</SelectItem><SelectItem value="different_operating_system">iOS versus Android</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label htmlFor="tester-a-os">Tester A operating system</Label><Select value={testerAOperatingSystem} onValueChange={(value) => { const os = value as typeof testerAOperatingSystem; setTesterAOperatingSystem(os); if (deviceComparisonDesign === "same_operating_system") setTesterBOperatingSystem(os); setErrors({}); }}><SelectTrigger id="tester-a-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS">iOS</SelectItem><SelectItem value="Android">Android</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label htmlFor="tester-b-os">Tester B operating system</Label><Select value={testerBOperatingSystem} onValueChange={(value) => { setTesterBOperatingSystem(value as typeof testerBOperatingSystem); setErrors({}); }} disabled={deviceComparisonDesign === "same_operating_system"}><SelectTrigger id="tester-b-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS">iOS</SelectItem><SelectItem value="Android">Android</SelectItem></SelectContent></Select></div>
-            </div>
+            <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-sm font-semibold">3. Operating-system restriction <span className="font-normal text-muted-foreground">(optional)</span></h3><p className="mt-1 text-xs text-muted-foreground">Turn this on only when tester operating systems must be controlled for assignment eligibility.</p></div><label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium"><Checkbox checked={deviceRestrictionEnabled} onCheckedChange={(checked) => { setDeviceRestrictionEnabled(checked === true); setDeviceComparisonDesign("same_operating_system"); setTesterBOperatingSystem(testerAOperatingSystem); setErrors({}); }} />Require specific operating systems</label></div>
+            {deviceRestrictionEnabled ? <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2"><Label htmlFor="device-comparison-design">OS rule</Label><Select value={deviceComparisonDesign} onValueChange={(value) => { const design = value as typeof deviceComparisonDesign; setDeviceComparisonDesign(design); if (design === "same_operating_system") setTesterBOperatingSystem(testerAOperatingSystem); else { setTesterAOperatingSystem("iOS"); setTesterBOperatingSystem("Android"); } setErrors({}); }}><SelectTrigger id="device-comparison-design" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="same_operating_system">Same OS on both sides</SelectItem><SelectItem value="different_operating_system">Different OS per side</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="tester-a-os">Tester A operating system</Label><Select value={testerAOperatingSystem} onValueChange={(value) => { const os = value as typeof testerAOperatingSystem; setTesterAOperatingSystem(os); setTesterBOperatingSystem(deviceComparisonDesign === "same_operating_system" ? os : os === "iOS" ? "Android" : "iOS"); setErrors({}); }}><SelectTrigger id="tester-a-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS" disabled={deviceComparisonDesign === "different_operating_system" && testerBOperatingSystem === "iOS"}>iOS</SelectItem><SelectItem value="Android" disabled={deviceComparisonDesign === "different_operating_system" && testerBOperatingSystem === "Android"}>Android</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="tester-b-os">Tester B operating system</Label><Select value={testerBOperatingSystem} onValueChange={(value) => { const os = value as typeof testerBOperatingSystem; setTesterBOperatingSystem(os); if (deviceComparisonDesign === "different_operating_system") setTesterAOperatingSystem(os === "iOS" ? "Android" : "iOS"); setErrors({}); }} disabled={deviceComparisonDesign === "same_operating_system"}><SelectTrigger id="tester-b-os" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="iOS" disabled={deviceComparisonDesign === "different_operating_system" && testerAOperatingSystem === "iOS"}>iOS</SelectItem><SelectItem value="Android" disabled={deviceComparisonDesign === "different_operating_system" && testerAOperatingSystem === "Android"}>Android</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">{deviceComparisonDesign === "same_operating_system" ? "Matches Tester A automatically." : `Must differ from Tester A (${testerAOperatingSystem}).`}</p></div>
+            </div> : <div className="rounded-md border border-border bg-secondary/20 px-4 py-3 text-xs leading-5 text-muted-foreground">No OS restriction. Coordinators may assign any eligible tester regardless of whether their device uses iOS or Android.</div>}
             <FieldError message={errors.operatingSystems} />
           </section>
         </div>
@@ -503,26 +538,31 @@ function CreateStudyForm({ providerOptions }: { providerOptions: ProviderService
 
       {step === 3 ? (
         <div className="space-y-6">
+          <section className="space-y-4">
+            <div><h3 className="text-sm font-semibold">Collection window</h3><p className="mt-1 text-xs text-muted-foreground">Dates and times are interpreted in {pickup?.timezone ?? "the route timezone"}.</p></div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2"><Label htmlFor="testing-start">Testing starts</Label><Input id="testing-start" type="datetime-local" min={minimumTestingStart} value={testingStartsAt} onChange={(event) => { setTestingStartsAt(event.target.value); if (testingEndsAt && event.target.value >= testingEndsAt) setTestingEndsAt(""); setErrors({}); }} aria-invalid={Boolean(errors.testingStartsAt || errors.schedule)} /><FieldError message={errors.testingStartsAt} /></div>
+              <div className="space-y-2"><Label htmlFor="testing-end">Testing ends</Label><Input id="testing-end" type="datetime-local" min={minimumTestingEnd} value={testingEndsAt} onChange={(event) => { setTestingEndsAt(event.target.value); setErrors({}); }} aria-invalid={Boolean(errors.testingEndsAt || errors.schedule)} /><FieldError message={errors.testingEndsAt} /></div>
+            </div>
+            <FieldError message={errors.schedule} />
+          </section>
+          <div className="border-t border-border pt-5"><h3 className="text-sm font-semibold">Study summary</h3><p className="mt-1 text-xs text-muted-foreground">Confirm the controlled study design before creation.</p></div>
           <div className="grid gap-4 border-y border-border py-5 sm:grid-cols-2 lg:grid-cols-4">
             <div><p className="text-xs text-muted-foreground">Study</p><p className="mt-1 text-sm font-medium">{name}</p><p className="mt-1 text-xs text-muted-foreground">Code assigned automatically</p></div>
             <div><p className="text-xs text-muted-foreground">Route</p><p className="mt-1 text-sm font-medium">{routeName}</p><p className="mt-1 text-xs text-muted-foreground">{pickup?.countryCode} · {pickup?.currencyCode}</p></div>
             <div><p className="text-xs text-muted-foreground">Timezone</p><p className="mt-1 text-sm font-medium">{pickup?.timezone ?? "Pending route"}</p><p className="mt-1 text-xs text-muted-foreground">Derived from pickup pin</p></div>
             <div><p className="text-xs text-muted-foreground">Providers</p><p className="mt-1 text-sm font-medium">{new Set(selectedProviderOptions.map((option) => option.platformId)).size}</p><p className="mt-1 text-xs text-muted-foreground">{selectedProviderOptions.length} selected services</p></div>
           </div>
+          <div className="grid gap-4 border-y border-border py-4 sm:grid-cols-2"><div><p className="text-[10px] uppercase text-muted-foreground">Isolated variable</p><p className="mt-1 text-sm font-medium">{isolatedVariable}</p></div><div><p className="text-[10px] uppercase text-muted-foreground">Target usable pairs</p><p className="mt-1 text-sm font-medium">{targetPairCount}</p></div><div className="sm:col-span-2"><p className="text-[10px] uppercase text-muted-foreground">Research question</p><p className="mt-1 text-sm leading-6">{studyQuestion}</p></div></div>
           <div className="space-y-3"><h3 className="text-sm font-semibold">Provider and ride tiers</h3><div className="divide-y divide-border border-y border-border">{selectedProviderGroups.map((provider) => <div key={provider.platformId} className="grid gap-1 py-3 sm:grid-cols-[180px_1fr]"><p className="text-sm font-medium">{provider.platformName}</p><p className="text-xs leading-5 text-muted-foreground">{provider.tiers.filter((tier) => selectedServices.includes(tier.id)).map((tier) => tier.serviceName).join(", ")}</p></div>)}</div></div>
-          <div className="space-y-3"><h3 className="text-sm font-semibold">Device condition</h3><div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border"><div className="p-4"><p className="text-[10px] uppercase text-primary">Tester A</p><p className="mt-1 text-sm font-medium">{testerAOperatingSystem}</p></div><div className="p-4"><p className="text-[10px] uppercase text-amber-400">Tester B</p><p className="mt-1 text-sm font-medium">{testerBOperatingSystem}</p><p className="mt-1 text-xs text-muted-foreground">{deviceComparisonDesign === "different_operating_system" ? "Intentional OS comparison" : "Same OS control"}</p></div></div></div>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="space-y-2"><Label htmlFor="testing-start">Testing starts</Label><Input id="testing-start" type="datetime-local" min={minimumTestingStart} value={testingStartsAt} onChange={(event) => { setTestingStartsAt(event.target.value); if (testingEndsAt && event.target.value >= testingEndsAt) setTestingEndsAt(""); setErrors({}); }} aria-invalid={Boolean(errors.schedule)} /></div>
-            <div className="space-y-2"><Label htmlFor="testing-end">Testing ends</Label><Input id="testing-end" type="datetime-local" min={minimumTestingEnd} value={testingEndsAt} onChange={(event) => { setTestingEndsAt(event.target.value); setErrors({}); }} aria-invalid={Boolean(errors.schedule)} /></div>
-          </div>
-          <FieldError message={errors.schedule} />
+          <div className="space-y-3"><h3 className="text-sm font-semibold">Device condition</h3>{deviceRestrictionEnabled ? <div className="grid overflow-hidden rounded-md border border-border sm:grid-cols-2 sm:divide-x sm:divide-border"><div className="p-4"><p className="text-[10px] uppercase text-primary">Tester A</p><p className="mt-1 text-sm font-medium">{testerAOperatingSystem}</p></div><div className="p-4"><p className="text-[10px] uppercase text-amber-400">Tester B</p><p className="mt-1 text-sm font-medium">{testerBOperatingSystem}</p><p className="mt-1 text-xs text-muted-foreground">{deviceComparisonDesign === "different_operating_system" ? "Different OS restriction" : "Same OS restriction"}</p></div></div> : <div className="rounded-md border border-border px-4 py-3 text-sm"><p className="font-medium">No OS restriction</p><p className="mt-1 text-xs text-muted-foreground">Tester operating systems are recorded but do not restrict assignment eligibility.</p></div>}</div>
           <div className="grid gap-3 sm:grid-cols-2"><div className="border-l-2 border-primary pl-3"><p className="text-xs font-medium">Pickup</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{pickup?.label}<br />{pickup?.formattedAddress}</p></div><div className="border-l-2 border-amber-400 pl-3"><p className="text-xs font-medium">Destination</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{destination?.label}<br />{destination?.formattedAddress}</p></div></div>
         </div>
       ) : null}
 
-      <div className="flex items-center justify-between border-t border-border pt-4">
-        <Button type="button" variant="outline" onClick={() => goToStep(Math.max(0, step - 1))} disabled={step === 0}><ChevronLeft className="size-4" />Back</Button>
-        {step < 3 ? <Button type="button" onClick={() => goToStep(step + 1)}>Continue<ChevronRight className="size-4" /></Button> : <Button type="button" onClick={submit} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Creating..." : "Create study"}</Button>}
+      <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-background/95 py-4 backdrop-blur">
+        <Button type="button" variant="outline" onClick={() => goToStep(Math.max(0, step - 1))} disabled={step === 0}><ChevronLeft className="size-4" /><span className="sm:hidden">Back</span><span className="hidden sm:inline">{step === 0 ? "Back" : stepLabels[step - 1]}</span></Button>
+        {step < 3 ? <Button type="button" onClick={() => goToStep(step + 1)}><span className="sm:hidden">Continue</span><span className="hidden sm:inline">Continue to {stepLabels[step + 1]}</span><ChevronRight className="size-4" /></Button> : <Button type="button" onClick={submit} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? (initialData ? "Saving changes..." : "Creating study...") : (initialData ? "Save study changes" : "Create study")}</Button>}
       </div>
     </div>
   );
@@ -565,7 +605,32 @@ function ReadinessMetric({ label, value }: { label: string; value: string | numb
   return <div className="rounded-md border border-border p-3"><p className="text-[9px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>;
 }
 
-function StudyList({ studies, activeStudyId, canArchive, readiness, providerOptions }: { studies: Study[]; activeStudyId: string | null; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
+function DraftStudyActions({ study }: { study: Study }) {
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function remove() {
+    startTransition(async () => {
+      const result = await deleteDraftStudyAction(study.id);
+      if (result.ok) { toast.success(result.message); setDeleteOpen(false); router.refresh(); }
+      else toast.error(result.message);
+    });
+  }
+
+  return <>
+    <Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/edit`}><Pencil className="size-3.5" />Edit</Link></Button>
+    <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <DialogTrigger asChild><Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" aria-label={`Delete ${study.name}`} title="Delete study"><Trash2 className="size-4" /></Button></DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Delete draft study?</DialogTitle><DialogDescription>This permanently deletes {study.name}, its route, members, and any draft protocol work. This action cannot be undone.</DialogDescription></DialogHeader>
+        <DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={pending}>Cancel</Button><Button variant="destructive" onClick={remove} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{pending ? "Deleting..." : "Delete study"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>;
+}
+
+function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive, readiness, providerOptions }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   function select(study: Study) {
     setPendingId(study.id);
@@ -577,11 +642,12 @@ function StudyList({ studies, activeStudyId, canArchive, readiness, providerOpti
   }
   return <div className="overflow-hidden rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{studies.map((study) => {
     const serviceLabel = configuredStudyServices(study, providerOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
-    return <TableRow key={study.id}><TableCell className="min-w-72 whitespace-normal"><p className="font-medium">{study.name}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell><div className="flex flex-wrap justify-end gap-2"><StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "outline"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select"}</Button></div></TableCell></TableRow>;
+    const canManageDraft = study.status === "draft" && !activeProtocolStudyIds.includes(study.id);
+    return <TableRow key={study.id}><TableCell className="min-w-72 whitespace-normal"><p className="font-medium">{study.name}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell><div className="flex flex-wrap justify-end gap-2">{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "outline"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select"}</Button></div></TableCell></TableRow>;
   })}{!studies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies are available yet.</TableCell></TableRow> : null}</TableBody></Table></div>;
 }
 
-export function StudiesManager({ studies, activeStudyId, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
+export function StudiesManager({ studies, activeStudyId, activeProtocolStudyIds, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
   const [tab, setTab] = useState("studies");
-  return <Tabs value={tab} onValueChange={setTab}><div className="flex items-center justify-between gap-3"><TabsList><TabsTrigger value="studies">All studies</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><Button onClick={() => setTab("create")}><Plus className="size-4" />Create study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
+  return <Tabs value={tab} onValueChange={setTab}><div className="flex items-center justify-between gap-3"><TabsList><TabsTrigger value="studies">All studies</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><Button onClick={() => setTab("create")}><Plus className="size-4" />Create study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} activeProtocolStudyIds={activeProtocolStudyIds} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
 }

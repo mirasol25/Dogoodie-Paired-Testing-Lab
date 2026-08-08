@@ -2,14 +2,15 @@ import { StudiesManager } from "@/components/paired-testing/studies/studies-mana
 import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { requireRole } from "@/lib/auth/server";
 import { getActiveStudy } from "@/lib/data/active-study";
-import { getStudyCompletionReadiness, listAccessibleStudies, listProviderServiceOptions } from "@/lib/data/studies";
+import { getStudyCompletionReadiness, listAccessibleStudies, listProviderServiceOptions, listStudyIdsWithActiveProtocol } from "@/lib/data/studies";
 
 export default async function StudiesPage() {
   const identity = await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
-  const [studies, activeStudy, providerOptions] = await Promise.all([
+  const [studies, activeStudy, providerOptions, activeProtocolStudyIds] = await Promise.all([
     listAccessibleStudies(),
     getActiveStudy(),
     listProviderServiceOptions(),
+    listStudyIdsWithActiveProtocol(),
   ]);
   const readiness = Object.fromEntries(await Promise.all(studies.filter((study) => ["active", "paused"].includes(study.status)).map(async (study) => [study.id, await getStudyCompletionReadiness(study.id)])));
   return (
@@ -19,7 +20,7 @@ export default async function StudiesPage() {
         title="Studies"
         description="Create controlled studies, define an initial public route, and choose the study used throughout the workspace."
       />
-      <StudiesManager studies={studies} activeStudyId={activeStudy?.id ?? null} providerOptions={providerOptions} role={identity.profile.role} readiness={readiness} />
+      <StudiesManager studies={studies} activeStudyId={activeStudy?.id ?? null} activeProtocolStudyIds={activeProtocolStudyIds} providerOptions={providerOptions} role={identity.profile.role} readiness={readiness} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireRole } from "@/lib/auth/server";
 import { ACTIVE_STUDY_COOKIE } from "@/lib/data/active-study";
-import { createStudyWithInitialRoute, extendStudyTestingPeriod, getAccessibleStudyById, StudyDataError, transitionStudyStatus } from "@/lib/data/studies";
+import { createStudyWithInitialRoute, deleteStudyBeforeProtocolActivation, extendStudyTestingPeriod, getAccessibleStudyById, StudyDataError, transitionStudyStatus, updateFullDraftStudy, updateStudyBeforeProtocolActivation } from "@/lib/data/studies";
 
 export interface StudyActionResult {
   ok: boolean;
@@ -67,5 +67,50 @@ export async function extendStudyTestingPeriodAction(studyId: string, testingEnd
   } catch (error) {
     if (error instanceof StudyDataError) return { ok: false, message: error.message };
     return { ok: false, message: "The testing period could not be extended." };
+  }
+}
+
+export async function updateDraftStudyAction(studyId: string, input: {
+  name: string;
+  studyQuestion: string;
+  isolatedVariable: string;
+  targetPairCount: number;
+  testingStartsAt: string;
+  testingEndsAt: string;
+}): Promise<StudyActionResult> {
+  await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
+  try {
+    const study = await updateStudyBeforeProtocolActivation(studyId, input);
+    revalidatePath("/paired-testing-demo", "layout");
+    return { ok: true, message: `${study.name} was updated.`, studyId };
+  } catch (error) {
+    if (error instanceof StudyDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The study could not be updated." };
+  }
+}
+
+export async function deleteDraftStudyAction(studyId: string): Promise<StudyActionResult> {
+  await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
+  try {
+    await deleteStudyBeforeProtocolActivation(studyId);
+    const cookieStore = await cookies();
+    if (cookieStore.get(ACTIVE_STUDY_COOKIE)?.value === studyId) cookieStore.delete(ACTIVE_STUDY_COOKIE);
+    revalidatePath("/paired-testing-demo", "layout");
+    return { ok: true, message: "The draft study was deleted." };
+  } catch (error) {
+    if (error instanceof StudyDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The study could not be deleted." };
+  }
+}
+
+export async function updateFullDraftStudyAction(studyId: string, input: unknown): Promise<StudyActionResult> {
+  await requireRole(["admin", "test_coordinator"], "/paired-testing-demo/studies");
+  try {
+    const study = await updateFullDraftStudy(studyId, input as never);
+    revalidatePath("/paired-testing-demo", "layout");
+    return { ok: true, message: `${study.name} was updated.`, studyId };
+  } catch (error) {
+    if (error instanceof StudyDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The study could not be updated." };
   }
 }

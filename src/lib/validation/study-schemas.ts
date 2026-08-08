@@ -79,11 +79,17 @@ export const createStudyWithRouteSchema = z.object({
   platformServiceIds: z.array(z.string().uuid()).min(1, "Select at least one provider service."),
   testerAServiceId: z.string().uuid("Select Tester A's provider and ride tier."),
   testerBServiceId: z.string().uuid("Select Tester B's provider and ride tier."),
-  deviceComparisonDesign: z.enum(["same_operating_system", "different_operating_system"]).default("same_operating_system"),
+  deviceComparisonDesign: z.enum(["uncontrolled", "same_operating_system", "different_operating_system"]).default("uncontrolled"),
   testerAOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
   testerBOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
 }).superRefine((value, context) => {
   validateSchedule(value, context);
+  if (!value.testingStartsAt) {
+    context.addIssue({ code: "custom", path: ["testingStartsAt"], message: "Select when testing starts." });
+  }
+  if (!value.testingEndsAt) {
+    context.addIssue({ code: "custom", path: ["testingEndsAt"], message: "Select when testing ends." });
+  }
   if (value.targetPairCount === null) {
     context.addIssue({ code: "custom", path: ["targetPairCount"], message: "Enter the required number of usable pairs." });
   }

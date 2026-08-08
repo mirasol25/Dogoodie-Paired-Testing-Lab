@@ -19,6 +19,13 @@ export interface ProviderServiceOption {
   countryCode: string;
 }
 
+export interface StudyEditorInitialData {
+  study: Study;
+  route: Database["public"]["Tables"]["study_routes"]["Row"];
+  pickup: Database["public"]["Tables"]["study_locations"]["Row"];
+  destination: Database["public"]["Tables"]["study_locations"]["Row"];
+}
+
 export interface ReviewerStudyWorkload {
   studyId: string;
   total: number;
@@ -99,6 +106,20 @@ export async function getAccessibleStudyById(
   const { data, error } = await supabase.from("studies").select("*").eq("id", studyId).maybeSingle();
   if (error) throw new StudyDataError("The study could not be loaded.", "DATABASE");
   return data;
+}
+
+export async function getStudyEditorInitialData(studyId: string): Promise<StudyEditorInitialData | null> {
+  const supabase = await createClient();
+  const study = await getAccessibleStudyById(studyId, supabase);
+  if (!study) return null;
+  const { data: route, error: routeError } = await supabase.from("study_routes").select("*").eq("study_id", studyId).eq("is_active", true).order("created_at").limit(1).maybeSingle();
+  if (routeError || !route) throw new StudyDataError("The active route could not be loaded.", "DATABASE");
+  const { data: locations, error: locationError } = await supabase.from("study_locations").select("*").in("id", [route.pickup_location_id, route.destination_location_id]);
+  if (locationError) throw new StudyDataError("The route locations could not be loaded.", "DATABASE");
+  const pickup = locations.find((location) => location.id === route.pickup_location_id);
+  const destination = locations.find((location) => location.id === route.destination_location_id);
+  if (!pickup || !destination) throw new StudyDataError("The route locations are incomplete.", "DATABASE");
+  return { study, route, pickup, destination };
 }
 
 export async function transitionStudyStatus(
@@ -182,6 +203,63 @@ export async function createStudy(
     throw new StudyDataError("The study could not be created.", "DATABASE");
   }
   if (!data) throw new StudyDataError("The study was not returned after creation.", "DATABASE");
+  return data;
+}
+
+export async function listStudyIdsWithActiveProtocol(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("protocols").select("study_id").eq("status", "active");
+  if (error) throw new StudyDataError("Protocol eligibility could not be loaded.", "DATABASE");
+  return [...new Set(data.map((protocol) => protocol.study_id))];
+}
+
+export async function updateStudyBeforeProtocolActivation(studyId: string, input: {
+  name: string;
+  studyQuestion: string;
+  isolatedVariable: string;
+  targetPairCount: number;
+  testingStartsAt: string;
+  testingEndsAt: string;
+}): Promise<Study> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_study_before_protocol_activation", {
+    p_study_id: studyId,
+    p_name: input.name,
+    p_study_question: input.studyQuestion,
+    p_isolated_variable: input.isolatedVariable,
+    p_target_pair_count: input.targetPairCount,
+    p_testing_starts_at: input.testingStartsAt,
+    p_testing_ends_at: input.testingEndsAt,
+  });
+  if (error) throw new StudyDataError(error.message || "The study could not be updated.", error.code === "42501" ? "FORBIDDEN" : "VALIDATION");
+  if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
+  return data;
+}
+
+export async function deleteStudyBeforeProtocolActivation(studyId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_study_before_protocol_activation", { p_study_id: studyId });
+  if (error) throw new StudyDataError(error.message || "The study could not be deleted.", error.code === "42501" ? "FORBIDDEN" : "VALIDATION");
+}
+
+export async function updateFullDraftStudy(studyId: string, input: CreateStudyWithRouteInput): Promise<Study> {
+  const parsed = createStudyWithRouteSchema.safeParse(input);
+  if (!parsed.success) throw new StudyDataError(parsed.error.issues[0]?.message || "Invalid study.", "VALIDATION");
+  const locationJson = (location: typeof parsed.data.pickup) => ({ label: location.label, formatted_address: location.formattedAddress, latitude: location.latitude, longitude: location.longitude, country_code: location.countryCode, region_name: location.regionName, currency_code: location.currencyCode, timezone: location.timezone, geocoding_provider: location.geocodingProvider, external_place_id: location.externalPlaceId, is_public_location: location.isPublicLocation });
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("update_full_draft_study", { p_study_id: studyId, p_payload: {
+    name: parsed.data.name, study_type: parsed.data.studyType, study_question: parsed.data.studyQuestion,
+    isolated_variable: parsed.data.isolatedVariable, target_pair_count: parsed.data.targetPairCount,
+    testing_starts_at: parsed.data.testingStartsAt, testing_ends_at: parsed.data.testingEndsAt,
+    route_name: parsed.data.routeName, pickup: locationJson(parsed.data.pickup), destination: locationJson(parsed.data.destination),
+    pickup_instructions: parsed.data.pickupInstructions, destination_instructions: parsed.data.destinationInstructions,
+    route_notes: parsed.data.routeNotes, platform_service_ids: parsed.data.platformServiceIds,
+    tester_a_service_id: parsed.data.testerAServiceId, tester_b_service_id: parsed.data.testerBServiceId,
+    device_comparison_design: parsed.data.deviceComparisonDesign,
+    tester_a_operating_system: parsed.data.testerAOperatingSystem, tester_b_operating_system: parsed.data.testerBOperatingSystem,
+  } });
+  if (error) throw new StudyDataError(error.message || "The study could not be updated.", error.code === "42501" ? "FORBIDDEN" : "VALIDATION");
+  if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
   return data;
 }
 

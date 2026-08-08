@@ -16,5 +16,7 @@ export default async function StudyMembersPage({ params }: { params: Promise<{ s
   const study = studies.find((item) => item.id === studyId);
   if (!study) notFound();
   const [members, eligibleAccounts] = await Promise.all([listStudyMembers(study.id), listEligibleStudyAccounts(study.id)]);
-  return <div className="space-y-6"><PageHeader eyebrow={`${study.study_code} - Study access`} title="Study members" description={study.name} actions={<Button asChild variant="outline"><Link href="/paired-testing-demo/studies"><ArrowLeft className="size-4" />Back to studies</Link></Button>} /><StudyMembersManager studyId={study.id} members={members} eligibleAccounts={eligibleAccounts} canManageCoordinators={canManageStudyCoordinators(identity.profile.role)} /></div>;
+  const configuration = study.configuration && typeof study.configuration === "object" && !Array.isArray(study.configuration) ? study.configuration as Record<string, unknown> : {};
+  const requiredTesterOs = configuration.device_comparison_design === "same_operating_system" && typeof configuration.tester_a_operating_system === "string" ? configuration.tester_a_operating_system : null;
+  return <div className="space-y-6"><PageHeader eyebrow={`${study.study_code} - Study access`} title="Study members" description={study.name} actions={<Button asChild variant="outline"><Link href="/paired-testing-demo/studies"><ArrowLeft className="size-4" />Back to studies</Link></Button>} /><StudyMembersManager studyId={study.id} members={members} eligibleAccounts={eligibleAccounts} canManageCoordinators={canManageStudyCoordinators(identity.profile.role)} requiredTesterOs={requiredTesterOs} /></div>;
 }

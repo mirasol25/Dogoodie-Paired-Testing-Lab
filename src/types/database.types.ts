@@ -1315,6 +1315,26 @@ export type Database = {
         Args: { p_study_id: string; p_testing_ends_at: string }
         Returns: Database["public"]["Tables"]["studies"]["Row"]
       }
+      update_study_before_protocol_activation: {
+        Args: {
+          p_isolated_variable: string
+          p_name: string
+          p_study_id: string
+          p_study_question: string
+          p_target_pair_count: number
+          p_testing_ends_at: string
+          p_testing_starts_at: string
+        }
+        Returns: Database["public"]["Tables"]["studies"]["Row"]
+      }
+      delete_study_before_protocol_activation: {
+        Args: { p_study_id: string }
+        Returns: undefined
+      }
+      update_full_draft_study: {
+        Args: { p_payload: Json; p_study_id: string }
+        Returns: Database["public"]["Tables"]["studies"]["Row"]
+      }
       get_study_completion_readiness: {
         Args: { p_study_id: string }
         Returns: Json

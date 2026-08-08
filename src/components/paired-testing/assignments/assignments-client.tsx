@@ -129,7 +129,9 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
   const selectedRoute = options.routes.find((route) => route.id === routeId);
   const timezone = selectedRoute?.timezone || study.display_timezone || "UTC";
   const testerAService = options.services.find((service) => service.id === testerAServiceId);
-  const testerAOperatingSystem = typeof configuration.tester_a_operating_system === "string" ? configuration.tester_a_operating_system : null;
+  const deviceComparisonDesign = typeof configuration.device_comparison_design === "string" ? configuration.device_comparison_design : "uncontrolled";
+  const restrictsOperatingSystems = deviceComparisonDesign === "same_operating_system" || deviceComparisonDesign === "different_operating_system";
+  const testerAOperatingSystem = restrictsOperatingSystems && typeof configuration.tester_a_operating_system === "string" ? configuration.tester_a_operating_system : null;
   const testerBOperatingSystem = typeof configuration.tester_b_operating_system === "string" ? configuration.tester_b_operating_system : testerAOperatingSystem;
   const testerAOptions = testerAOperatingSystem ? testers.filter((tester) => tester.operatingSystem?.toLowerCase() === testerAOperatingSystem.toLowerCase()) : testers;
   const testerBOptions = testerBOperatingSystem ? testers.filter((tester) => tester.operatingSystem?.toLowerCase() === testerBOperatingSystem.toLowerCase()) : testers;
