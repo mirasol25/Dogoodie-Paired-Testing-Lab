@@ -33,7 +33,7 @@ export async function requestPasswordResetAction(
     const requestHeaders = await headers();
     const supabase = await createClient();
     await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-      redirectTo: `${applicationOrigin(requestHeaders)}/auth/confirm?type=recovery`,
+      redirectTo: `${applicationOrigin(requestHeaders)}/auth/confirm`,
     });
   } catch {
     return { message: "The reset request could not be completed. Try again later." };
