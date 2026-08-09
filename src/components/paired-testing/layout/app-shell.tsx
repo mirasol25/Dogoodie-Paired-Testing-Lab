@@ -54,7 +54,7 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
       ) : null}
       {!compact && user.role === "admin" ? (
         <Button asChild variant="ghost" size="sm" className="mt-3 w-full justify-start text-muted-foreground hover:text-foreground">
-          <Link href="/paired-testing-demo/admin/accounts">
+          <Link href="/admin/accounts">
             <Users className="size-3.5" />
             Manage accounts
           </Link>
@@ -62,7 +62,7 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
       ) : null}
       {!compact ? (
         <Button asChild variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground hover:text-foreground">
-          <Link href="/paired-testing-demo/device-profile"><UserRoundCog className="size-3.5" />Device profile</Link>
+          <Link href="/device-profile"><UserRoundCog className="size-3.5" />Device profile</Link>
         </Button>
       ) : null}
       <form action={signOutAction} className={cn(!compact && "mt-3")}>
@@ -83,24 +83,12 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
 function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const allowedPaths: Partial<Record<AppShellUser["role"], string[]>> = {
-    tester: ["/paired-testing-demo", "/paired-testing-demo/assignments"],
+    tester: ["/", "/assignments"],
     expert_reviewer: [
-      "/paired-testing-demo",
-      "/paired-testing-demo/dashboard",
-      "/paired-testing-demo/protocol",
-      "/paired-testing-demo/pairs",
-      "/paired-testing-demo/evidence",
-      "/paired-testing-demo/audit",
-      "/paired-testing-demo/reports",
+      "/", "/dashboard", "/protocol", "/pairs", "/evidence", "/audit", "/reports",
     ],
     law_firm_viewer: [
-      "/paired-testing-demo",
-      "/paired-testing-demo/dashboard",
-      "/paired-testing-demo/protocol",
-      "/paired-testing-demo/pairs",
-      "/paired-testing-demo/evidence",
-      "/paired-testing-demo/audit",
-      "/paired-testing-demo/reports",
+      "/", "/dashboard", "/protocol", "/pairs", "/evidence", "/audit", "/reports",
     ],
   };
   const items = allowedPaths[role]
@@ -110,7 +98,7 @@ function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNaviga
     <nav aria-label="Primary navigation" className="space-y-1">
       {items.map((item: NavigationItem) => {
         const Icon = icons[item.icon as keyof typeof icons] ?? Activity;
-        const active = item.href === "/paired-testing-demo"
+        const active = item.href === "/"
           ? pathname === item.href
           : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
@@ -135,7 +123,7 @@ function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNaviga
 
 function Brand() {
   return (
-    <Link href="/paired-testing-demo" className="flex items-center gap-3 rounded-md">
+    <Link href="/" className="flex items-center gap-3 rounded-md">
       <span className="grid size-9 place-items-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
         <ShieldCheck className="size-5" strokeWidth={1.8} />
       </span>
@@ -150,12 +138,12 @@ function Brand() {
 export function AppShell({ children, user, activeStudy }: { children: React.ReactNode; user: AppShellUser; activeStudy: AppShellStudy | null }) {
   const pathname = usePathname();
   const current = demoConfig.navigation.find((item) =>
-    item.href === "/paired-testing-demo" ? pathname === item.href : pathname.startsWith(item.href));
+    item.href === "/" ? pathname === item.href : pathname.startsWith(item.href));
   return (
     <div className="min-h-screen">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border/80 bg-[#08120e]/95 p-4 backdrop-blur-xl lg:flex lg:flex-col">
         <Brand />
-        <Link href={user.role === "tester" ? "/paired-testing-demo/tester-studies" : user.role === "expert_reviewer" ? "/paired-testing-demo/review-studies" : user.role === "law_firm_viewer" ? "/paired-testing-demo/view-studies" : "/paired-testing-demo/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
+        <Link href={user.role === "tester" ? "/tester-studies" : user.role === "expert_reviewer" ? "/review-studies" : user.role === "law_firm_viewer" ? "/view-studies" : "/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
           <div className="flex items-center justify-between gap-2">
             <span className="mono truncate text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span>
             <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />

@@ -7,6 +7,29 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  async redirects() {
+    return [{
+      source: "/paired-testing-demo/:path*",
+      destination: "/:path*",
+      permanent: true,
+    }];
+  },
+  async rewrites() {
+    const routes = [
+      "dashboard", "protocol", "assignments", "pairs", "evidence", "audit",
+      "reports", "admin", "device-profile", "studies", "submission",
+      "review-studies", "tester-studies", "view-studies",
+    ];
+    return {
+      beforeFiles: [
+        { source: "/", destination: "/paired-testing-demo" },
+        ...routes.map((route) => ({
+          source: `/${route}/:path*`,
+          destination: `/paired-testing-demo/${route}/:path*`,
+        })),
+      ],
+    };
+  },
 };
 
 export default nextConfig;

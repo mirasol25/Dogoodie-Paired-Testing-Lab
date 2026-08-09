@@ -27,8 +27,15 @@ export function createLoginRedirect(request: NextRequest, error?: string): NextR
 }
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  const isProtectedPath = request.nextUrl.pathname === "/paired-testing-demo"
-    || request.nextUrl.pathname.startsWith("/paired-testing-demo/");
+  const protectedRoots = [
+    "/dashboard", "/protocol", "/assignments", "/pairs", "/evidence",
+    "/audit", "/reports", "/admin", "/device-profile", "/studies",
+    "/submission", "/review-studies", "/tester-studies", "/view-studies",
+  ];
+  const isProtectedPath = request.nextUrl.pathname === "/"
+    || request.nextUrl.pathname === "/paired-testing-demo"
+    || request.nextUrl.pathname.startsWith("/paired-testing-demo/")
+    || protectedRoots.some((root) => request.nextUrl.pathname === root || request.nextUrl.pathname.startsWith(`${root}/`));
   if (!isSupabaseConfigured()) {
     return isProtectedPath ? createLoginRedirect(request, "configuration") : NextResponse.next({ request });
   }
