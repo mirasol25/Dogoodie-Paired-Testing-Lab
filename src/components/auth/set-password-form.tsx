@@ -32,11 +32,9 @@ export function SetPasswordForm() {
   const [step, setStep] = useState(1);
   const [location, setLocation] = useState<{ latitude: string; longitude: string } | null>(null);
   const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [networkType, setNetworkType] = useState("");
   const [deviceType, setDeviceType] = useState("");
   const [operatingSystem, setOperatingSystem] = useState("");
   const [operatingSystemVersion, setOperatingSystemVersion] = useState("");
-  const [appVersion, setAppVersion] = useState("");
   const [clientError, setClientError] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const languageRef = useRef<HTMLInputElement>(null);
@@ -77,8 +75,8 @@ export function SetPasswordForm() {
   }
 
   function continueFromDevice() {
-    if (!networkType || !deviceType.trim() || !operatingSystem || !operatingSystemVersion.trim() || !appVersion.trim()) {
-      setClientError("Complete all five device details before continuing.");
+    if (!deviceType.trim() || !operatingSystem || !operatingSystemVersion.trim()) {
+      setClientError("Complete all device details before continuing.");
       return;
     }
     setClientError("");
@@ -116,13 +114,13 @@ export function SetPasswordForm() {
         <Button type="button" className="w-full" onClick={continueFromLocation}>Continue to device information</Button>
       </div>
       <div className={`space-y-4 ${step === 2 ? "" : "hidden"}`}>
-        <div><h2 className="text-base font-semibold">Set up your device profile</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Enter the phone, software, app, and network you will use during testing.</p></div>
+        <div><h2 className="text-base font-semibold">Set up your device profile</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Enter the phone and operating system you will use during testing.</p></div>
       <section className="overflow-hidden rounded-md border border-border bg-card/35" aria-labelledby="device-information-heading">
         <div className="flex gap-3 border-b border-border px-4 py-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary"><Smartphone className="size-4" /></span>
           <div>
             <h2 id="device-information-heading" className="text-sm font-semibold">Device information</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">These details help the protocol identify device, software, app-version, or network differences that could affect a paired fare comparison. They are saved to your tester profile and prefilled in future submissions.</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">These stable device details help coordinators apply optional device restrictions. Your network and ride-hailing app version are recorded separately for each submission because they can change.</p>
           </div>
         </div>
         <Accordion type="single" collapsible>
@@ -133,32 +131,27 @@ export function SetPasswordForm() {
                 {operatingSystem === "iOS" || !operatingSystem ? <div>
                   <p className="font-semibold text-foreground">iPhone</p>
                   <p className="mt-1 text-muted-foreground"><span className="text-foreground">Device and iOS:</span> Settings &gt; General &gt; About. Use Model Name and iOS Version.</p>
-                  <p className="mt-2 text-muted-foreground"><span className="text-foreground">App version:</span> Open the ride-hailing app and check its Settings, About, or Help screen. If unavailable, check Settings &gt; General &gt; iPhone Storage &gt; the app.</p>
                 </div> : null}
                 {operatingSystem === "Android" ? <div>
                   <p className="font-semibold text-foreground">Android</p>
                   <p className="mt-1 text-muted-foreground"><span className="text-foreground">Device and Android:</span> Settings &gt; About phone. Open Software information when needed.</p>
-                  <p className="mt-2 text-muted-foreground"><span className="text-foreground">App version:</span> Settings &gt; Apps &gt; select the ride-hailing app. The version is usually shown in App details or at the bottom.</p>
                 </div> : null}
-                <p className="mt-3 text-muted-foreground"><span className="text-foreground">Network type:</span> Enter the connection you will use during testing. Check the status bar or network settings.</p>
               </div>
             </AccordionContent>
           </AccordionItem>
         </Accordion>
       </section>
       <div className="grid gap-4 sm:grid-cols-2">
-        <ChoiceField name="networkType" label="Network type" value={networkType} onChange={setNetworkType} placeholder="Select network" options={["Wi-Fi", "4G/LTE", "5G"]} error={state.fieldErrors?.networkType?.[0]} />
         <DeviceField name="deviceType" label="Device model" placeholder={operatingSystem === "Android" ? "Samsung Galaxy A55" : "iPhone 15"} value={deviceType} onChange={setDeviceType} error={state.fieldErrors?.deviceType?.[0]} />
         <ChoiceField name="operatingSystem" label="Operating system" value={operatingSystem} onChange={(value) => { setOperatingSystem(value); setOperatingSystemVersion(""); }} placeholder="Select operating system" options={["iOS", "Android"]} error={state.fieldErrors?.operatingSystem?.[0]} />
         <ChoiceField name="operatingSystemVersion" label="OS version" value={operatingSystemVersion} onChange={setOperatingSystemVersion} placeholder={operatingSystem ? `Select ${operatingSystem} version` : "Select an operating system first"} options={operatingSystem ? [...operatingSystemVersions[operatingSystem as keyof typeof operatingSystemVersions]] : []} disabled={!operatingSystem} error={state.fieldErrors?.operatingSystemVersion?.[0]} />
-        <DeviceField name="appVersion" label="Ride-hailing app version" placeholder="For example, 5.355.0" value={appVersion} onChange={setAppVersion} error={state.fieldErrors?.appVersion?.[0]} />
       </div>
       <div className="flex gap-2"><Button type="button" variant="outline" className="flex-1" onClick={() => { setClientError(""); setStep(1); }}>Back</Button><Button type="button" className="flex-1" onClick={continueFromDevice}>Review and create password</Button></div>
       </div>
       <div className={`space-y-5 ${step === 3 ? "" : "hidden"}`}>
       <div><h2 className="text-base font-semibold">Create your password</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Review your tester profile, then secure your account.</p></div>
       <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2">
-        {[['Location', locationStatus === 'ready' ? 'Current location verified' : 'IP-country fallback'], ['Device', deviceType || 'Not entered'], ['Software', [operatingSystem, operatingSystemVersion].filter(Boolean).join(' ') || 'Not entered'], ['Network', networkType || 'Not entered'], ['Ride app version', appVersion || 'Not entered']].map(([label, value]) => <div key={label} className="bg-card px-3 py-2.5"><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-medium">{value}</p></div>)}
+        {[['Location', locationStatus === 'ready' ? 'Current location verified' : 'IP-country fallback'], ['Device', deviceType || 'Not entered'], ['Software', [operatingSystem, operatingSystemVersion].filter(Boolean).join(' ') || 'Not entered']].map(([label, value]) => <div key={label} className="bg-card px-3 py-2.5"><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-medium">{value}</p></div>)}
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
@@ -172,7 +165,7 @@ export function SetPasswordForm() {
         {state.fieldErrors?.confirmPassword ? <p className="text-xs text-destructive">{state.fieldErrors.confirmPassword[0]}</p> : null}
       </div>
       <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => { setClientError(""); setStep(2); }}>Back</Button><div className="flex-1"><SubmitButton /></div></div>
-      <p className="text-xs leading-5 text-muted-foreground">By creating your account, you consent to storing your verified country, registration IP, browser, language, timezone, screen size, and the five device details above for future studies.</p>
+      <p className="text-xs leading-5 text-muted-foreground">By creating your account, you consent to storing your verified country, registration IP, browser, language, timezone, screen size, and the three device details above for future studies.</p>
       </div>
     </form>
   );

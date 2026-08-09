@@ -16,6 +16,8 @@ export interface CurrentProfile {
 export interface ManagedAccount extends CurrentProfile {
   createdAt: string;
   updatedAt: string;
+  invitationExpiresAt?: string | null;
+  invitationExpired?: boolean;
 }
 
 export async function listManagedAccounts(

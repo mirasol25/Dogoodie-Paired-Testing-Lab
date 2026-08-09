@@ -10,7 +10,7 @@ import { reverseLocation } from "@/lib/geocoding/nominatim";
 
 export interface SetPasswordState {
   message?: string;
-  fieldErrors?: Partial<Record<"password" | "confirmPassword" | "latitude" | "longitude" | "networkType" | "deviceType" | "operatingSystem" | "operatingSystemVersion" | "appVersion", string[]>>;
+  fieldErrors?: Partial<Record<"password" | "confirmPassword" | "latitude" | "longitude" | "deviceType" | "operatingSystem" | "operatingSystemVersion", string[]>>;
 }
 
 export async function setPasswordAction(
@@ -21,9 +21,9 @@ export async function setPasswordAction(
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
     latitude: formData.get("latitude"), longitude: formData.get("longitude"),
-    networkType: formData.get("networkType"), deviceType: formData.get("deviceType"),
+    deviceType: formData.get("deviceType"),
     operatingSystem: formData.get("operatingSystem"), operatingSystemVersion: formData.get("operatingSystemVersion"),
-    appVersion: formData.get("appVersion"), browserLanguage: formData.get("browserLanguage"),
+    browserLanguage: formData.get("browserLanguage"),
     browserTimezone: formData.get("browserTimezone"), screenSize: formData.get("screenSize"), userAgent: formData.get("userAgent"),
   });
   if (!parsed.success) {
@@ -73,9 +73,9 @@ export async function setPasswordAction(
     .from("profiles")
     .update({
       account_status: "active", tester_country_code: verifiedCountryCode, tester_country_name: verifiedCountryName,
-      network_type: parsed.data.networkType, device_type: parsed.data.deviceType,
+      device_type: parsed.data.deviceType,
       operating_system: parsed.data.operatingSystem, operating_system_version: parsed.data.operatingSystemVersion,
-      app_version: parsed.data.appVersion, registration_latitude: parsed.data.latitude,
+      registration_latitude: parsed.data.latitude,
       registration_longitude: parsed.data.longitude, registration_ip: registrationIp,
       ip_country_code: ipCountry || null, location_review_status: locationReviewStatus,
       browser_language: parsed.data.browserLanguage || null, browser_timezone: parsed.data.browserTimezone || null,

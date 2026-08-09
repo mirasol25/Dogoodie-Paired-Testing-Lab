@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/server";
 import { createAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { appRoleSchema, inviteAccountSchema } from "@/lib/validation/account-schemas";
+import { invitationMetadata } from "@/lib/auth/invitations";
 
 const accountUpdateSchema = z.object({
   userId: z.string().uuid(),
@@ -43,7 +44,7 @@ export async function inviteAccountAction(input: unknown): Promise<AccountUpdate
   const requestHeaders = await headers();
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.inviteUserByEmail(parsed.data.email, {
-    data: { display_name: parsed.data.displayName, password_setup_required: true },
+    data: invitationMetadata(parsed.data.displayName),
     redirectTo: `${getApplicationOrigin(requestHeaders)}/auth/confirm`,
   });
 
@@ -72,6 +73,32 @@ export async function inviteAccountAction(input: unknown): Promise<AccountUpdate
 
   revalidatePath("/paired-testing-demo/admin/accounts");
   return { ok: true, message: `Invitation sent to ${parsed.data.email}.` };
+}
+
+export async function resendAccountInvitationAction(input: unknown): Promise<AccountUpdateResult> {
+  await requireRole("admin", "/paired-testing-demo/admin/accounts");
+  const parsed = z.object({ userId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "The selected account is invalid." };
+  if (!isSupabaseAdminConfigured()) return { ok: false, message: "Secure invitations are not configured." };
+
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("email,display_name,account_status")
+    .eq("id", parsed.data.userId)
+    .maybeSingle();
+  if (profileError || !profile) return { ok: false, message: "The selected account no longer exists." };
+  if (profile.account_status !== "pending") return { ok: false, message: "Only pending accounts can receive another invitation." };
+
+  const requestHeaders = await headers();
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(profile.email, {
+    data: invitationMetadata(profile.display_name || profile.email),
+    redirectTo: `${getApplicationOrigin(requestHeaders)}/auth/confirm`,
+  });
+  if (error || !data.user) return { ok: false, message: error?.message || "Supabase could not resend the invitation." };
+
+  revalidatePath("/paired-testing-demo/admin/accounts");
+  return { ok: true, message: `A new invitation was sent to ${profile.email}.` };
 }
 
 export async function updateAccountAction(input: unknown): Promise<AccountUpdateResult> {

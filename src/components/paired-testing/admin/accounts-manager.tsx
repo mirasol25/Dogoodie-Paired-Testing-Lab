@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, LoaderCircle, MailPlus, Search, ShieldAlert, UserRoundCog } from "lucide-react";
+import { Check, ClockAlert, LoaderCircle, MailPlus, RefreshCw, Search, ShieldAlert, UserRoundCog } from "lucide-react";
 import { toast } from "sonner";
-import { inviteAccountAction, updateAccountAction } from "@/app/paired-testing-demo/admin/accounts/actions";
+import { inviteAccountAction, resendAccountInvitationAction, updateAccountAction } from "@/app/paired-testing-demo/admin/accounts/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,7 +89,7 @@ function InviteAccountDialog({ configured }: { configured: boolean }) {
   );
 }
 
-function AccountRow({ account, isCurrent }: { account: ManagedAccount; isCurrent: boolean }) {
+function AccountRow({ account, isCurrent, invitationsConfigured }: { account: ManagedAccount; isCurrent: boolean; invitationsConfigured: boolean }) {
   const [displayName, setDisplayName] = useState(account.displayName ?? "");
   const [role, setRole] = useState<AppRole>(account.role);
   const [status, setStatus] = useState<AccountStatus>(account.accountStatus);
@@ -104,6 +104,14 @@ function AccountRow({ account, isCurrent }: { account: ManagedAccount; isCurrent
         role,
         accountStatus: status,
       });
+      if (result.ok) toast.success(result.message);
+      else toast.error(result.message);
+    });
+  }
+
+  function resendInvitation() {
+    startTransition(async () => {
+      const result = await resendAccountInvitationAction({ userId: account.id });
       if (result.ok) toast.success(result.message);
       else toast.error(result.message);
     });
@@ -145,14 +153,16 @@ function AccountRow({ account, isCurrent }: { account: ManagedAccount; isCurrent
             {Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
           </SelectContent>
         </Select>
+        {account.accountStatus === "pending" && account.invitationExpiresAt ? <div className="mt-2 space-y-1"><Badge variant="outline" className={account.invitationExpired ? "border-destructive/50 text-destructive" : "border-amber-400/40 text-amber-400"}>{account.invitationExpired ? <ClockAlert className="size-3" /> : null}{account.invitationExpired ? "Invitation expired" : "Invitation pending"}</Badge><p className="text-[10px] text-muted-foreground">{account.invitationExpired ? "Expired" : "Expires"} {new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(account.invitationExpiresAt))}</p></div> : null}
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(account.createdAt))}</TableCell>
-      <TableCell className="text-right">
+      <TableCell><div className="flex justify-end gap-2">
+        {account.accountStatus === "pending" ? <Button size="sm" variant="outline" onClick={resendInvitation} disabled={pending || !invitationsConfigured}><RefreshCw className={`size-4 ${pending ? "animate-spin" : ""}`} />Resend</Button> : null}
         <Button size="sm" onClick={save} disabled={isCurrent || pending || !changed}>
           {pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
           Save
         </Button>
-      </TableCell>
+      </div></TableCell>
     </TableRow>
   );
 }
@@ -216,7 +226,7 @@ export function AccountsManager({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((account) => <AccountRow key={`${account.id}-${account.updatedAt}`} account={account} isCurrent={account.id === currentUserId} />)}
+            {filtered.map((account) => <AccountRow key={`${account.id}-${account.updatedAt}`} account={account} isCurrent={account.id === currentUserId} invitationsConfigured={invitationsConfigured} />)}
             {filtered.length === 0 ? <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">No accounts match this search.</TableCell></TableRow> : null}
           </TableBody>
         </Table>
