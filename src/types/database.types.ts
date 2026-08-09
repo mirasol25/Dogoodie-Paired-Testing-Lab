@@ -1521,6 +1521,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      list_assignment_tester_options: {
+        Args: { p_study_id: string }
+        Returns: {
+          device_type: string | null
+          display_name: string | null
+          email: string
+          operating_system: string | null
+          operating_system_version: string | null
+          user_id: string
+        }[]
+      }
       list_assignment_pair_roster: {
         Args: { p_study_id: string }
         Returns: {

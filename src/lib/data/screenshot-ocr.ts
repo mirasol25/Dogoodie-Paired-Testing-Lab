@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { extractSelectedRide } from "@/lib/screenshot-ocr/extract-selected-ride";
 import { resolveScreenshotService, validateRequiredService, type OCRService } from "@/lib/screenshot-ocr/service-resolver";
 import { resolveQuoteTime } from "@/lib/screenshot-ocr/time-parser";
-import type { ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
+import type { ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
 
 export class ScreenshotOCRError extends Error {}
 
@@ -36,23 +36,69 @@ export async function processScreenshotEvidence(evidenceFileId: string): Promise
   const { data: file, error: fileError } = await supabase.storage.from(evidence.storage_bucket).download(evidence.storage_path);
   if (fileError || !file) throw new ScreenshotOCRError("The private screenshot file could not be read for OCR.");
   const extracted = await extractSelectedRide(Buffer.from(await file.arrayBuffer()), platform.slug);
-  const resolved = resolveScreenshotService(services as OCRService[], extracted.selectedRideLabel);
-  const serviceValidation = validateRequiredService(requiredService.id, resolved.platformServiceId);
+  const candidates = extracted.candidates.flatMap((candidate): ScreenshotCandidate[] => {
+    if (candidate.type !== "ride_card") return [candidate];
+    const candidateService = resolveScreenshotService(services as OCRService[], candidate.text);
+    return candidateService.platformServiceId ? [{ ...candidate, displayValue: candidateService.platformServiceName ?? candidate.text, platformServiceId: candidateService.platformServiceId }] : [];
+  });
+  const serviceValidation = "unverified" as const;
   const quoteTime = resolveQuoteTime(extracted.statusBarTimeText, evidence.uploaded_at, study?.display_timezone || "UTC");
-  const result: ScreenshotValidationResult = { ...extracted, serviceValidation, expectedPlatformServiceId: requiredService.id, detectedPlatformServiceId: resolved.platformServiceId, quoteTime };
   const admin = createAdminClient() as unknown as { from: (table: string) => any };
   const { error: deactivateError } = await admin.from("screenshot_ocr_validations").update({ is_active: false }).eq("submission_id", evidence.submission_id).eq("is_active", true);
   if (deactivateError) throw new ScreenshotOCRError(deactivateError.message || "The earlier screenshot validation could not be replaced.");
-  const { error: recordError } = await admin.from("screenshot_ocr_validations").insert({
+  const { data: savedValidation, error: recordError } = await admin.from("screenshot_ocr_validations").insert({
     evidence_file_id: evidence.id, assignment_id: evidence.assignment_id, submission_id: evidence.submission_id,
-    expected_platform_service_id: requiredService.id, detected_platform_service_id: resolved.platformServiceId, service_validation: serviceValidation,
+    expected_platform_service_id: requiredService.id, detected_platform_service_id: null, service_validation: serviceValidation,
     raw_ride_label: extracted.selectedRideLabel, detected_fare_min: extracted.fare?.min ?? null, detected_fare_max: extracted.fare?.max ?? null,
     detected_status_bar_time: extracted.statusBarTimeText, resolved_quote_timestamp: quoteTime.resolvedTimestamp,
     quote_time_resolution: quoteTime, detected_battery_percentage: extracted.batteryPercentage,
-    raw_ocr_output: extracted.diagnostics, warnings: extracted.warnings,
-  });
-  if (recordError) throw new ScreenshotOCRError(recordError.message || "The screenshot validation could not be saved.");
-  return result;
+    raw_ocr_output: extracted.diagnostics, warnings: extracted.warnings, candidates, selection_status: "pending",
+  }).select("id").single();
+  if (recordError || !savedValidation) throw new ScreenshotOCRError(recordError?.message || "The screenshot validation could not be saved.");
+  return { ...extracted, candidates, serviceValidation, expectedPlatformServiceId: requiredService.id, detectedPlatformServiceId: null, quoteTime, validationId: savedValidation.id, selectionStatus: "pending" };
+}
+
+function selectedCandidate(candidates: ScreenshotCandidate[], id: string, type: ScreenshotCandidate["type"]) {
+  return candidates.find((candidate) => candidate.id === id && candidate.type === type);
+}
+
+export async function confirmScreenshotCandidateSelection(validationId: string, selections: ScreenshotCandidateSelections, userId: string): Promise<ScreenshotValidationResult> {
+  const supabase = await createClient();
+  const db = supabase as unknown as { from: (table: string) => any };
+  const { data: validation, error } = await db.from("screenshot_ocr_validations").select("*").eq("id", validationId).eq("is_active", true).maybeSingle();
+  if (error || !validation) throw new ScreenshotOCRError("The screenshot candidates are no longer available.");
+  const { data: evidence } = await db.from("evidence_files").select("uploaded_at,uploaded_by,study_id").eq("id", validation.evidence_file_id).eq("uploaded_by", userId).maybeSingle();
+  if (!evidence) throw new ScreenshotOCRError("The screenshot evidence is unavailable.");
+  const candidates = validation.candidates as ScreenshotCandidate[];
+  const ride = selectedCandidate(candidates, selections.rideCardCandidateId, "ride_card");
+  const fare = selectedCandidate(candidates, selections.fareCandidateId, "fare");
+  const time = selectedCandidate(candidates, selections.timeCandidateId, "time");
+  if (!ride?.platformServiceId || !fare || !time) throw new ScreenshotOCRError("Choose one detected box for the selected ride, fare, and screenshot time.");
+  const fareCenter = { x: fare.bounds.x + fare.bounds.width / 2, y: fare.bounds.y + fare.bounds.height / 2 };
+  const fareBelongsToRide = fareCenter.x >= ride.bounds.x - 0.03 && fareCenter.x <= ride.bounds.x + ride.bounds.width + 0.03
+    && fareCenter.y >= ride.bounds.y - 0.03 && fareCenter.y <= ride.bounds.y + ride.bounds.height + 0.03;
+  if (!fareBelongsToRide) throw new ScreenshotOCRError("Choose the fare box inside the selected ride card.");
+  const fareValue = fare.parsedValue as { min: number; max: number | null };
+  if (!Number.isFinite(fareValue.min)) throw new ScreenshotOCRError("One of the selected screenshot candidates is invalid.");
+  const { data: study } = await db.from("studies").select("display_timezone").eq("id", evidence.study_id).maybeSingle();
+  const quoteTime = resolveQuoteTime(String(time.parsedValue), evidence.uploaded_at, study?.display_timezone || "UTC");
+  if (!quoteTime.resolvedTimestamp) throw new ScreenshotOCRError("The selected screenshot time could not be resolved near the upload time.");
+  const serviceValidation = validateRequiredService(validation.expected_platform_service_id, ride.platformServiceId);
+  const admin = createAdminClient() as unknown as { from: (table: string) => any };
+  const { error: updateError } = await admin.from("screenshot_ocr_validations").update({
+    detected_platform_service_id: ride.platformServiceId, service_validation: serviceValidation,
+    raw_ride_label: ride.text, detected_fare_min: fareValue.min, detected_fare_max: fareValue.max,
+    detected_status_bar_time: String(time.parsedValue), resolved_quote_timestamp: quoteTime.resolvedTimestamp,
+    quote_time_resolution: quoteTime,
+    selected_candidates: selections, selection_status: "confirmed", confirmed_by: evidence.uploaded_by, confirmed_at: new Date().toISOString(),
+  }).eq("id", validationId).eq("is_active", true);
+  if (updateError) throw new ScreenshotOCRError(updateError.message || "The screenshot selections could not be confirmed.");
+  return {
+    selectedRideLabel: ride.text, fare: fareValue, statusBarTimeText: String(time.parsedValue), batteryPercentage: validation.detected_battery_percentage,
+    warnings: validation.warnings ?? [], diagnostics: validation.raw_ocr_output ?? { selectedCardRawText: "" }, candidates,
+    serviceValidation, expectedPlatformServiceId: validation.expected_platform_service_id, detectedPlatformServiceId: ride.platformServiceId,
+    quoteTime, validationId, selectionStatus: "confirmed",
+  };
 }
 
 export async function getSubmissionScreenshotValidation(submissionId: string) {

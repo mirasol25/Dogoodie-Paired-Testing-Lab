@@ -14,8 +14,16 @@ const sessionObservation = {
 };
 
 describe("submission draft validation", () => {
-  it("allows the observation UI to omit account device and OS metadata", () => {
-    expect(submissionDraftClientSchema.safeParse(sessionObservation).success).toBe(true);
+  it("allows the observation UI to omit screenshot-confirmed and account metadata", () => {
+    const { displayedFare, quoteTimestamp, ...clientObservation } = sessionObservation;
+    void displayedFare; void quoteTimestamp;
+    expect(submissionDraftClientSchema.safeParse(clientObservation).success).toBe(true);
+  });
+
+  it("requires a manually entered battery percentage from the observation UI", () => {
+    const { displayedFare, quoteTimestamp, batteryPercentage, ...clientObservation } = sessionObservation;
+    void displayedFare; void quoteTimestamp; void batteryPercentage;
+    expect(submissionDraftClientSchema.safeParse(clientObservation).success).toBe(false);
   });
 
   it("requires server-sourced device and OS metadata for the stored snapshot", () => {

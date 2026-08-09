@@ -71,6 +71,23 @@ export interface AssignmentSetupOptions {
   protocols: AssignmentProtocolOption[];
 }
 
+export async function listAssignmentTesterOptions(
+  studyId: string,
+  suppliedClient?: SupabaseClient<Database>,
+): Promise<AssignmentTesterOption[]> {
+  const supabase = suppliedClient ?? await createClient();
+  const { data, error } = await supabase.rpc("list_assignment_tester_options", { p_study_id: studyId });
+  if (error) throw new AssignmentDataError(error.message || "Eligible assignment testers could not be loaded.");
+  return data.map((tester) => ({
+    id: tester.user_id,
+    displayName: tester.display_name?.trim() || tester.email,
+    email: tester.email,
+    deviceType: tester.device_type,
+    operatingSystem: tester.operating_system,
+    operatingSystemVersion: tester.operating_system_version,
+  }));
+}
+
 export class AssignmentDataError extends Error {
   constructor(message: string) {
     super(message);

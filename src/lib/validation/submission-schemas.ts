@@ -20,6 +20,8 @@ export const submissionDraftSchema = z.object({
 // submits only session-specific values; the server adds these three fields
 // from the authenticated user's saved Device Profile.
 export const submissionDraftClientSchema = submissionDraftSchema.omit({
+  displayedFare: true,
+  quoteTimestamp: true,
   deviceType: true,
   operatingSystem: true,
   operatingSystemVersion: true,

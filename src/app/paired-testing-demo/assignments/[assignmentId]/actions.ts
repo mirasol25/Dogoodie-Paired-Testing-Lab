@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth/server";
 import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
 import { requireRole } from "@/lib/auth/server";
-import { ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
+import { confirmScreenshotCandidateSelection, ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
+import type { ScreenshotCandidateSelections } from "@/lib/screenshot-ocr/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { submissionDraftClientSchema } from "@/lib/validation/submission-schemas";
 
@@ -64,9 +65,24 @@ export async function saveSubmissionDraftAction(input: unknown): Promise<{ ok: b
     if (profileError || !deviceProfile?.device_type || !deviceProfile.operating_system || !deviceProfile.operating_system_version) {
       return { ok: false, message: "Complete your Device Profile before saving an observation." };
     }
+    type ValidationRow = { detected_fare_min: number | string | null; resolved_quote_timestamp: string | null };
+    type ValidationQuery = { select: (columns: string) => ValidationQuery; eq: (column: string, value: unknown) => ValidationQuery; maybeSingle: () => Promise<{ data: ValidationRow | null; error: { message: string } | null }> };
+    const db = supabase as unknown as { from: (table: string) => ValidationQuery };
+    const { data: screenshotValidation, error: validationError } = await db.from("screenshot_ocr_validations")
+      .select("detected_fare_min,resolved_quote_timestamp")
+      .eq("assignment_id", parsed.data.assignmentId)
+      .eq("is_active", true)
+      .eq("selection_status", "confirmed")
+      .eq("service_validation", "matched")
+      .maybeSingle();
+    if (validationError || !screenshotValidation?.detected_fare_min || !screenshotValidation.resolved_quote_timestamp) {
+      return { ok: false, message: "Confirm the screenshot fare, time, and selected ride before saving." };
+    }
 
     const submission = await saveSubmissionDraft({
       ...parsed.data,
+      displayedFare: Number(screenshotValidation.detected_fare_min),
+      quoteTimestamp: screenshotValidation.resolved_quote_timestamp,
       deviceType: deviceProfile.device_type,
       operatingSystem: deviceProfile.operating_system,
       operatingSystemVersion: deviceProfile.operating_system_version,
@@ -110,6 +126,17 @@ export async function processScreenshotEvidenceAction(evidenceId: string): Promi
     return { ok: true, message: validation.serviceValidation === "matched" ? "Required service verified." : validation.serviceValidation === "mismatched" ? "The selected service does not match this assignment." : "The selected service could not be automatically verified.", validation };
   } catch (error) {
     return { ok: false, message: error instanceof ScreenshotOCRError ? error.message : "Screenshot OCR processing failed." };
+  }
+}
+
+export async function confirmScreenshotCandidatesAction(validationId: string, selections: ScreenshotCandidateSelections): Promise<{ ok: boolean; message: string; validation?: Awaited<ReturnType<typeof confirmScreenshotCandidateSelection>> }> {
+  const identity = await requireActiveUser("/paired-testing-demo/assignments");
+  try {
+    const validation = await confirmScreenshotCandidateSelection(validationId, selections, identity.user.id);
+    revalidatePath("/paired-testing-demo/assignments");
+    return { ok: true, message: validation.serviceValidation === "matched" ? "Screenshot details confirmed and the ride tier matches." : "The selected ride tier does not match this assignment.", validation };
+  } catch (error) {
+    return { ok: false, message: error instanceof ScreenshotOCRError ? error.message : "Screenshot selections could not be confirmed." };
   }
 }
 

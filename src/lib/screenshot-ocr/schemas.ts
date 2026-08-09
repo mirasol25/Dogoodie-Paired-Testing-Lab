@@ -1,6 +1,17 @@
 export type ServiceValidationStatus = "matched" | "mismatched" | "unverified";
 
 export type CropRegion = { left: number; top: number; width: number; height: number };
+export type NormalizedBounds = { x: number; y: number; width: number; height: number };
+export type ScreenshotCandidateType = "ride_card" | "fare" | "time" | "battery";
+export type ScreenshotCandidate = {
+  id: string;
+  type: ScreenshotCandidateType;
+  text: string;
+  displayValue: string;
+  bounds: NormalizedBounds;
+  parsedValue: string | number | { min: number; max: number | null };
+  platformServiceId?: string | null;
+};
 
 export type ScreenshotOCRResult = {
   selectedRideLabel: string | null;
@@ -9,6 +20,7 @@ export type ScreenshotOCRResult = {
   batteryPercentage: number | null;
   warnings: string[];
   diagnostics: { selectedCardRawText: string; selectedCardCrop?: CropRegion; statusBarRawText?: string };
+  candidates: ScreenshotCandidate[];
 };
 
 export type QuoteTimeResolution = {
@@ -30,6 +42,14 @@ export type ScreenshotValidationResult = ScreenshotOCRResult & {
   expectedPlatformServiceId: string;
   detectedPlatformServiceId: string | null;
   quoteTime: QuoteTimeResolution;
+  validationId: string;
+  selectionStatus: "pending" | "confirmed";
+};
+
+export type ScreenshotCandidateSelections = {
+  rideCardCandidateId: string;
+  fareCandidateId: string;
+  timeCandidateId: string;
 };
 
 export interface PlatformScreenshotAdapter {

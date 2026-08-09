@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 import { CheckCircle2, LocateFixed, LoaderCircle, Save, Send } from "lucide-react";
 import { toast } from "sonner";
 import { saveSubmissionDraftAction, submitObservationAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
@@ -40,10 +40,6 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
   });
   const update = (field: keyof Values, value: string) => { setValues((current) => ({ ...current, [field]: value })); setErrors((current) => ({ ...current, [field]: "" })); setSaved(false); };
 
-  function useCurrentTime() {
-    update("quoteTimestamp", formatInTimeZone(new Date(), timezone, "yyyy-MM-dd'T'HH:mm:ss"));
-  }
-
   function useLocation() {
     if (!navigator.geolocation) return toast.error("Location access is not available in this browser.");
     setLocating(true);
@@ -59,7 +55,6 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
       ...current,
       displayedFare: result.fare ? result.fare.min.toFixed(2) : current.displayedFare,
       quoteTimestamp: result.quoteTime.resolvedTimestamp ? formatInTimeZone(result.quoteTime.resolvedTimestamp, timezone, "yyyy-MM-dd'T'HH:mm:ss") : current.quoteTimestamp,
-      batteryPercentage: result.batteryPercentage !== null ? String(result.batteryPercentage) : current.batteryPercentage,
     }));
     setSaved(false);
   }
@@ -70,8 +65,6 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
     const numberValue = (value: string) => value.trim() ? Number(value) : Number.NaN;
     const input = {
       assignmentId: assignment.id,
-      displayedFare: numberValue(values.displayedFare),
-      quoteTimestamp: values.quoteTimestamp ? fromZonedTime(values.quoteTimestamp, timezone).toISOString() : "",
       latitude: numberValue(values.latitude), longitude: numberValue(values.longitude), networkType: values.networkType,
       appVersion: values.appVersion, batteryPercentage: numberValue(values.batteryPercentage), notes: values.notes,
     };
@@ -110,7 +103,7 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
   return <section className="space-y-5 border-t border-border pt-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] uppercase text-muted-foreground">Tester submission</p><h2 className="mt-1.5 text-base font-semibold">Capture quote observation</h2><p className="mt-1 text-xs text-muted-foreground">{ownSlot.platformName} - {ownSlot.serviceName} / {assignment.pickup_location} to {assignment.destination_location}</p></div>{saved ? <span className="text-xs font-medium text-primary">Draft saved</span> : null}</div>
     <EvidenceUploader assignment={assignment} ownSlot={ownSlot} submissionId={submissionId} observationSaved={saved} initialEvidence={evidence} onOCRResult={applyOCR} onEvidenceStateChange={handleEvidenceState} showFinalSubmission={false} />
     {!submission && technicalProfile ? <div className="flex items-start gap-3 rounded-md border border-primary/25 bg-primary/[0.025] px-4 py-3"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" /><div><p className="text-xs font-medium">Saved device profile applied</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Confirm the network and ride-hailing app version for this session. Change either value when you switched connections or the app was updated.</p></div></div> : null}
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Field label={`Displayed fare (${study.default_currency ?? "Currency"})`} value={values.displayedFare} onChange={(value) => update("displayedFare", value)} type="number" step="0.01" error={errors.displayedFare} /><Field label={`Quote timestamp (${timezone})`} value={values.quoteTimestamp} onChange={(value) => update("quoteTimestamp", value)} type="datetime-local" step="1" error={errors.quoteTimestamp} action={<Button type="button" size="sm" variant="ghost" onClick={useCurrentTime}>Now</Button>} /><Field label="Battery percentage" value={values.batteryPercentage} onChange={(value) => update("batteryPercentage", value)} type="number" min="0" max="100" error={errors.batteryPercentage} /><Field label="Latitude" value={values.latitude} onChange={(value) => update("latitude", value)} type="number" step="0.000001" error={errors.latitude} /><Field label="Longitude" value={values.longitude} onChange={(value) => update("longitude", value)} type="number" step="0.000001" error={errors.longitude} /><div className="flex items-start pt-8"><Button type="button" className="w-full" variant="outline" onClick={useLocation} disabled={locating}><LocateFixed className="size-4" />{locating ? "Locating..." : "Use current location"}</Button></div><ChoiceField label="Network used for this session" value={values.networkType} onChange={(value) => update("networkType", value)} options={["Wi-Fi", "4G/LTE", "5G"]} error={errors.networkType} /><Field label={`${ownSlot.platformName} app version`} value={values.appVersion} onChange={(value) => update("appVersion", value)} placeholder="For example, 5.355.0" error={errors.appVersion} /></div>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Field label={`Screenshot fare (${study.default_currency ?? "Currency"})`} value={values.displayedFare} onChange={() => undefined} type="number" step="0.01" readOnly placeholder="Confirm screenshot boxes first" /><Field label={`Screenshot timestamp (${timezone})`} value={values.quoteTimestamp} onChange={() => undefined} type="datetime-local" step="1" readOnly placeholder="Confirm screenshot boxes first" /><Field label="Battery percentage" value={values.batteryPercentage} onChange={(value) => update("batteryPercentage", value)} type="number" min="0" max="100" step="1" placeholder="Enter 0 to 100" error={errors.batteryPercentage} /><Field label="Latitude" value={values.latitude} onChange={(value) => update("latitude", value)} type="number" step="0.000001" error={errors.latitude} /><Field label="Longitude" value={values.longitude} onChange={(value) => update("longitude", value)} type="number" step="0.000001" error={errors.longitude} /><div className="flex items-start pt-8"><Button type="button" className="w-full" variant="outline" onClick={useLocation} disabled={locating}><LocateFixed className="size-4" />{locating ? "Locating..." : "Use current location"}</Button></div><ChoiceField label="Network used for this session" value={values.networkType} onChange={(value) => update("networkType", value)} options={["Wi-Fi", "4G/LTE", "5G"]} error={errors.networkType} /><Field label={`${ownSlot.platformName} app version`} value={values.appVersion} onChange={(value) => update("appVersion", value)} placeholder="For example, 5.355.0" error={errors.appVersion} /></div>
     <div className="space-y-2"><Label htmlFor="submission-notes">Notes <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="submission-notes" rows={3} maxLength={1000} value={values.notes} onChange={(event) => update("notes", event.target.value)} /></div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Save your changes before final submission.</p><Button onClick={save} disabled={savingDraft || submittingObservation}>{savingDraft ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{savingDraft ? "Saving..." : "Save draft"}</Button></div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><div><p className="text-xs font-medium">Final submission</p><p className="mt-1 text-xs text-muted-foreground">{evidenceState.mismatched ? "A replacement screenshot is required." : !saved ? "Save the latest observation changes first." : !evidenceState.requiredComplete ? "Upload all required evidence to continue." : "Observation and required evidence are complete."}</p></div><Button onClick={submit} disabled={!submissionId || !saved || !evidenceState.requiredComplete || evidenceState.mismatched || savingDraft || submittingObservation}>{submittingObservation ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}{submittingObservation ? "Submitting..." : "Submit observation"}</Button></div>
