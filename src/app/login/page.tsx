@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,8 +39,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
     <main id="main-content" className="grid min-h-screen place-items-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-3">
-          <span className="grid size-11 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
-            <ShieldCheck className="size-6" strokeWidth={1.8} />
+          <span className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-primary/30 bg-black shadow-sm shadow-primary/15">
+            <Image src="/icon.png" alt="" fill sizes="44px" className="object-cover" priority />
           </span>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">DoGoodie</p>

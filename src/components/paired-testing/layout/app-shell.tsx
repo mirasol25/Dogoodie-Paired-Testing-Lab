@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Activity, ClipboardCheck, Columns2, FileArchive, FileText, History,
-  ChevronRight, Home, LayoutDashboard, LogOut, Menu, ShieldCheck, UserRoundCog, Users,
+  ChevronRight, Home, LayoutDashboard, LogOut, Menu, UserRoundCog, Users,
 } from "lucide-react";
 import { signOutAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -124,8 +125,8 @@ function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNaviga
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-3 rounded-md">
-      <span className="grid size-9 place-items-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-        <ShieldCheck className="size-5" strokeWidth={1.8} />
+      <span className="relative size-9 shrink-0 overflow-hidden rounded-lg border border-primary/30 bg-black shadow-sm shadow-primary/15">
+        <Image src="/icon.png" alt="" fill sizes="36px" className="object-cover" priority />
       </span>
       <span className="min-w-0">
         <span className="block text-[10px] font-semibold uppercase tracking-[0.19em] text-primary">DoGoodie</span>
