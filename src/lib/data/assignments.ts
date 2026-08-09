@@ -302,17 +302,17 @@ export async function getOwnAssignmentSubmission(assignmentId: string, userId: s
   return data;
 }
 
-export async function getLatestTesterTechnicalProfile(userId: string): Promise<Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version"> | null> {
+export async function getLatestTesterTechnicalProfile(userId: string): Promise<Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("device_type,operating_system,operating_system_version")
+    .select("device_type,operating_system,operating_system_version,app_version")
     .eq("id", userId)
     .maybeSingle();
   // Allow the assignment screen to remain usable while a deployment is
   // catching up with the profile-device migration. Once the columns exist,
   // normal persistent-profile loading resumes automatically.
-  if (error && (error.code === "42703" || /(?:device_type|operating_system)/i.test(error.message))) return null;
+  if (error && (error.code === "42703" || /(?:device_type|operating_system|app_version)/i.test(error.message))) return null;
   if (error) throw new AssignmentDataError("Your saved device profile could not be loaded.");
   // Values are independently reusable. A newly added field should not hide
   // the rest of a tester's saved profile just because that one value is blank.

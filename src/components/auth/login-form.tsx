@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { LoaderCircle, LockKeyhole } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
+import Link from "next/link";
 import { signInAction, type LoginActionState } from "@/app/auth/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ function SubmitButton() {
 
 export function LoginForm({ nextPath }: { nextPath: string }) {
   const [state, formAction] = useActionState(signInAction, initialState);
+  const [showPassword, setShowPassword] = useState(false);
+  const passwordVisibilityLabel = showPassword ? "Hide password" : "Show password";
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -53,16 +56,37 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          aria-invalid={Boolean(state.fieldErrors?.password)}
-          aria-describedby={state.fieldErrors?.password ? "password-error" : undefined}
-          required
-        />
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="password">Password</Label>
+          <Link href="/forgot-password" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            className="pr-11"
+            autoComplete="current-password"
+            aria-invalid={Boolean(state.fieldErrors?.password)}
+            aria-describedby={state.fieldErrors?.password ? "password-error" : undefined}
+            required
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 size-7 -translate-y-1/2"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setShowPassword((current) => !current)}
+            aria-label={passwordVisibilityLabel}
+            title={passwordVisibilityLabel}
+            aria-pressed={showPassword}
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </Button>
+        </div>
         {state.fieldErrors?.password ? (
           <p id="password-error" className="text-xs text-destructive">{state.fieldErrors.password[0]}</p>
         ) : null}

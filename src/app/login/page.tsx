@@ -21,6 +21,8 @@ function statusMessage(error: string | undefined): string | null {
   if (error === "account_pending") return "Your account is awaiting administrator activation.";
   if (error === "account_disabled") return "Your account is disabled. Contact an administrator.";
   if (error === "invalid_invitation") return "This invitation link is invalid or has expired. Ask an administrator for a new invitation.";
+  if (error === "invalid_recovery") return "This password-reset link is invalid or has expired. Request a new link.";
+  if (error === "password_reset") return "Your password was updated. Sign in with your new password.";
   return null;
 }
 
