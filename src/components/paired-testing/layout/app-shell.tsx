@@ -169,8 +169,9 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
               <SheetTrigger asChild>
                 <Button variant="outline" size="icon" className="lg:hidden"><Menu className="size-4" /><span className="sr-only">Open navigation</span></Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[290px] p-4">
-                <SheetHeader className="px-0 pt-0"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
+              <SheetContent side="left" className="!h-dvh w-[290px] gap-0 overflow-hidden p-0">
+                <SheetHeader className="shrink-0 px-4 pb-0 pt-4"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <Brand />
                 {["admin", "test_coordinator"].includes(user.role) ? <Link href="/paired-testing-demo/studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select or create a study"}</span>{activeStudy ? <span className="mt-1 block text-[10px] capitalize text-muted-foreground">{activeStudy.status} · {activeStudy.currency ?? "Currency pending"}</span> : <span className="mt-1 block text-[10px] text-muted-foreground">Study management</span>}{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
                 {user.role === "tester" ? <Link href="/paired-testing-demo/tester-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
@@ -178,6 +179,7 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
                 {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "No finalized study available"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
                 <div className="mt-6"><Navigation role={user.role} /></div>
                 <div className="mt-6 border-t border-border pt-5"><AccountPanel user={user} /></div>
+                </div>
               </SheetContent>
             </Sheet>
             <div>
