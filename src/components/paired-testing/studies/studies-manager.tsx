@@ -289,7 +289,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
 
   function changeStudyType(value: typeof studyType) {
     setStudyType(value);
-    setIsolatedVariable(value === "cross_platform_comparison" ? "Ride-hailing platform" : withinComparisonDesign === "different_tier" ? "Ride tier" : "");
+    setIsolatedVariable((current) => value === "cross_platform_comparison" ? "Ride-hailing platform" : current === "Ride-hailing platform" ? "" : current);
     setSelectedPlatformIds([]);
     setTesterAServiceId("");
     setTesterBServiceId("");
@@ -313,7 +313,6 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
       setErrors({});
       return;
     }
-    if (studyType === "within_platform_pair" && withinComparisonDesign === "different_tier") setIsolatedVariable("Ride tier");
     if (side === "tester_a") {
       setTesterAServiceId(option.id);
       if (studyType === "cross_platform_comparison") setTesterBServiceId("");
@@ -330,7 +329,6 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
     setTesterBServiceId("");
     if ((provider?.tiers.length ?? 0) < 2) {
       setWithinComparisonDesign("same_tier");
-      setIsolatedVariable((current) => current === "Ride tier" ? "" : current);
     }
     setErrors({});
   }
@@ -339,7 +337,6 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
     setWithinComparisonDesign(value);
     setTesterAServiceId("");
     setTesterBServiceId("");
-    setIsolatedVariable((current) => value === "different_tier" ? "Ride tier" : current === "Ride tier" ? "" : current);
     setErrors({});
   }
 
@@ -398,8 +395,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
         testerAServiceId,
         testerBServiceId,
         deviceComparisonDesign: deviceRestrictionEnabled ? deviceComparisonDesign : "uncontrolled",
-        testerAOperatingSystem,
-        testerBOperatingSystem,
+        ...(deviceRestrictionEnabled ? { testerAOperatingSystem, testerBOperatingSystem } : {}),
         testingSynchronization,
       };
       const result = initialData ? await updateFullDraftStudyAction(initialData.study.id, payload) : await createStudyAction(payload);

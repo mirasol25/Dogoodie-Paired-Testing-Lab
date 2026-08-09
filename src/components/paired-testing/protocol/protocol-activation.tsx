@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, CircleAlert, LoaderCircle, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { activateProtocolAction } from "@/app/paired-testing-demo/protocol/actions";
@@ -26,6 +27,7 @@ function requiredObservationCount(configuration: Json): number {
 }
 
 export function ProtocolActivation({ studyId, protocol }: { studyId: string; protocol: { id: string; title: string; protocolCode: string; version: string; studyQuestion: string; isolatedVariable: string | null; testerAValue: string | null; testerBValue: string | null; fixedControls: Json; evidenceRequirements: Json; validationConfiguration: Json; exclusionConditions: Json } }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const requiredControlCodes = ["provider", "ride_tier", "pickup_location", "destination_location", "currency"];
@@ -46,6 +48,8 @@ export function ProtocolActivation({ studyId, protocol }: { studyId: string; pro
       if (result.ok) {
         setOpen(false);
         toast.success(result.message);
+        router.push("/paired-testing-demo/assignments");
+        router.refresh();
       } else toast.error(result.message);
     });
   }
@@ -56,8 +60,8 @@ export function ProtocolActivation({ studyId, protocol }: { studyId: string; pro
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{checks.map((check) => <a key={check.label} href={check.href} className={`flex min-h-16 items-start gap-2 rounded-md border px-3 py-3 text-xs transition-colors hover:bg-secondary ${check.complete ? "border-primary/30 bg-primary/5" : "border-border"}`}>{check.complete ? <Check className="mt-0.5 size-4 shrink-0 text-primary" /> : <CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" />}<span><span className="block font-medium">{check.label}</span><span className="mt-1 block leading-4 text-muted-foreground">{check.complete ? "Complete" : check.missing}</span></span></a>)}</div>
       <div className="flex justify-end">
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button type="button" disabled={!complete}><LockKeyhole className="size-4" />Activate {protocol.version}</Button></DialogTrigger>
-          <DialogContent><DialogHeader><DialogTitle>Activate {protocol.version}?</DialogTitle><DialogDescription>You reviewed the complete A-F preview above. {protocol.protocolCode} will become active and this exact version will be locked from further editing.</DialogDescription></DialogHeader><div className="rounded-md border border-border bg-secondary/25 p-3 text-xs"><p className="font-medium">{protocol.title}</p><p className="mt-1 text-muted-foreground">{protocol.isolatedVariable}: {protocol.testerAValue} compared with {protocol.testerBValue}</p></div><DialogFooter><DialogClose asChild><Button variant="outline" disabled={pending}>Cancel</Button></DialogClose><Button type="button" onClick={activate} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}{pending ? "Activating..." : "Confirm and activate"}</Button></DialogFooter></DialogContent>
+          <DialogTrigger asChild><Button type="button" disabled={!complete}><LockKeyhole className="size-4" />Activate and continue</Button></DialogTrigger>
+          <DialogContent><DialogHeader><DialogTitle>Activate {protocol.version}?</DialogTitle><DialogDescription>You reviewed the complete A-F preview above. {protocol.protocolCode} will become active and this exact version will be locked from further editing. You will continue to assignment scheduling.</DialogDescription></DialogHeader><div className="rounded-md border border-border bg-secondary/25 p-3 text-xs"><p className="font-medium">{protocol.title}</p><p className="mt-1 text-muted-foreground">{protocol.isolatedVariable}: {protocol.testerAValue} compared with {protocol.testerBValue}</p></div><DialogFooter><DialogClose asChild><Button variant="outline" disabled={pending}>Cancel</Button></DialogClose><Button type="button" onClick={activate} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}{pending ? "Activating..." : "Activate and open assignments"}</Button></DialogFooter></DialogContent>
         </Dialog>
       </div>
     </section>

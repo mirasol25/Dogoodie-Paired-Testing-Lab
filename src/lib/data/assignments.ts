@@ -103,6 +103,11 @@ export interface AssignmentOperationalSummary {
   pair: { id: string; pairCode: string; technicalStatus: string; evidenceStatus: string } | null;
 }
 
+export interface AssignmentRouteGuidance {
+  pickupInstructions: string | null;
+  destinationInstructions: string | null;
+}
+
 export async function cancelAssignment(assignmentId: string, reason: string): Promise<AssignmentRow> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("cancel_assignment", { p_assignment_id: assignmentId, p_reason: reason });
@@ -264,6 +269,23 @@ export async function listStudyAssignments(
 export async function getStudyAssignment(studyId: string, assignmentId: string): Promise<AssignmentSummary | null> {
   const assignments = await listStudyAssignments(studyId);
   return assignments.find((assignment) => assignment.id === assignmentId) ?? null;
+}
+
+export async function getAssignmentRouteGuidance(assignment: AssignmentSummary): Promise<AssignmentRouteGuidance | null> {
+  const instructions = assignment.instructions;
+  const routeId = instructions && typeof instructions === "object" && !Array.isArray(instructions) && typeof instructions.route_id === "string"
+    ? instructions.route_id
+    : null;
+  if (!routeId) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("study_routes")
+    .select("pickup_instructions,destination_instructions")
+    .eq("id", routeId)
+    .eq("study_id", assignment.study_id)
+    .maybeSingle();
+  if (error) throw new AssignmentDataError("The route instructions could not be loaded.");
+  return data ? { pickupInstructions: data.pickup_instructions, destinationInstructions: data.destination_instructions } : null;
 }
 
 export async function getAccessibleAssignmentStudyId(assignmentId: string): Promise<string | null> {

@@ -246,6 +246,10 @@ export async function updateFullDraftStudy(studyId: string, input: CreateStudyWi
   const parsed = createStudyWithRouteSchema.safeParse(input);
   if (!parsed.success) throw new StudyDataError(parsed.error.issues[0]?.message || "Invalid study.", "VALIDATION");
   const locationJson = (location: typeof parsed.data.pickup) => ({ label: location.label, formatted_address: location.formattedAddress, latitude: location.latitude, longitude: location.longitude, country_code: location.countryCode, region_name: location.regionName, currency_code: location.currencyCode, timezone: location.timezone, geocoding_provider: location.geocodingProvider, external_place_id: location.externalPlaceId, is_public_location: location.isPublicLocation });
+  const operatingSystemPayload = parsed.data.deviceComparisonDesign === "uncontrolled" ? {} : {
+    tester_a_operating_system: parsed.data.testerAOperatingSystem,
+    tester_b_operating_system: parsed.data.testerBOperatingSystem,
+  };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("update_full_draft_study", { p_study_id: studyId, p_payload: {
     name: parsed.data.name, study_type: parsed.data.studyType, study_question: parsed.data.studyQuestion,
@@ -257,7 +261,7 @@ export async function updateFullDraftStudy(studyId: string, input: CreateStudyWi
     tester_a_service_id: parsed.data.testerAServiceId, tester_b_service_id: parsed.data.testerBServiceId,
     device_comparison_design: parsed.data.deviceComparisonDesign,
     testing_synchronization: parsed.data.testingSynchronization,
-    tester_a_operating_system: parsed.data.testerAOperatingSystem, tester_b_operating_system: parsed.data.testerBOperatingSystem,
+    ...operatingSystemPayload,
   } });
   if (error) throw new StudyDataError(error.message || "The study could not be updated.", error.code === "42501" ? "FORBIDDEN" : "VALIDATION");
   if (!data) throw new StudyDataError("The updated study was not returned.", "DATABASE");
@@ -312,14 +316,17 @@ export async function createStudyWithInitialRoute(
   const configuration = data.configuration && typeof data.configuration === "object" && !Array.isArray(data.configuration)
     ? data.configuration as Record<string, unknown>
     : {};
+  const operatingSystemConfiguration = parsed.data.deviceComparisonDesign === "uncontrolled" ? {} : {
+    tester_a_operating_system: parsed.data.testerAOperatingSystem,
+    tester_b_operating_system: parsed.data.testerBOperatingSystem,
+  };
   const { data: configuredStudy, error: configurationError } = await supabase
     .from("studies")
     .update({ configuration: {
       ...configuration,
       device_comparison_design: parsed.data.deviceComparisonDesign,
       testing_synchronization: parsed.data.testingSynchronization,
-      tester_a_operating_system: parsed.data.testerAOperatingSystem,
-      tester_b_operating_system: parsed.data.testerBOperatingSystem,
+      ...operatingSystemConfiguration,
     } })
     .eq("id", data.id)
     .select()
