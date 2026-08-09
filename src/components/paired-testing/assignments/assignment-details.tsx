@@ -17,6 +17,7 @@ import type { Study } from "@/lib/data/studies";
 import { TesterReadiness } from "@/components/paired-testing/assignments/tester-readiness";
 import { TesterStart } from "@/components/paired-testing/assignments/tester-start";
 import { TesterSubmissionForm } from "@/components/paired-testing/assignments/tester-submission-form";
+import type { ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
 
 function instructionsOf(assignment: AssignmentSummary) {
   const value = assignment.instructions;
@@ -35,7 +36,7 @@ function formatSchedule(value: string | null, timezone: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
 }
 
-export function AssignmentDetails({ study, assignment, routeGuidance, submission, technicalProfile, evidence, currentUserId, canManage, operations }: { study: Study; assignment: AssignmentSummary; routeGuidance: AssignmentRouteGuidance | null; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version"> | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null }) {
+export function AssignmentDetails({ study, assignment, routeGuidance, submission, technicalProfile, evidence, screenshotValidation, screenshotPreviewUrl, currentUserId, canManage, operations }: { study: Study; assignment: AssignmentSummary; routeGuidance: AssignmentRouteGuidance | null; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version"> | null; evidence: EvidenceRow[]; screenshotValidation: ScreenshotValidationResult | null; screenshotPreviewUrl: string; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null }) {
   const timezone = timezoneOf(assignment, study.display_timezone || "UTC");
   const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
@@ -64,7 +65,7 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
 
     {ownTester ? <TesterReadiness assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
     {ownTester ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
-    {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} timezone={timezone} /> : null}
+    {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} /> : null}
     {ownTester?.status === "submitted" ? <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><p className="text-sm font-semibold text-primary">Observation submitted</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{assignment.status === "ready_for_validation" ? "Both tester observations are complete and ready for matching and validation." : "Your observation is locked. Waiting for the partner tester to submit."}</p></section> : null}
 
   </div>;

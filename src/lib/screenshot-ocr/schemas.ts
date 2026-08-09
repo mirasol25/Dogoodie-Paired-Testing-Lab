@@ -11,6 +11,8 @@ export type ScreenshotCandidate = {
   bounds: NormalizedBounds;
   parsedValue: string | number | { min: number; max: number | null };
   platformServiceId?: string | null;
+  validationStatus?: "valid" | "invalid";
+  validationMessage?: string | null;
 };
 
 export type ScreenshotOCRResult = {
@@ -44,6 +46,7 @@ export type ScreenshotValidationResult = ScreenshotOCRResult & {
   quoteTime: QuoteTimeResolution;
   validationId: string;
   selectionStatus: "pending" | "confirmed";
+  selectedCandidates?: Partial<ScreenshotCandidateSelections>;
 };
 
 export type ScreenshotCandidateSelections = {

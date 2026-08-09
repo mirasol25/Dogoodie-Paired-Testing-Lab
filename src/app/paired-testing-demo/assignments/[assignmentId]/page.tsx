@@ -5,6 +5,8 @@ import { canManageAssignments } from "@/lib/auth/assignment-permissions";
 import { getActiveStudy } from "@/lib/data/active-study";
 import { getAccessibleAssignmentStudyId, getAssignmentOperationalSummary, getAssignmentRouteGuidance, getLatestTesterTechnicalProfile, getOwnAssignmentSubmission, getOwnSubmissionEvidence, getStudyAssignment } from "@/lib/data/assignments";
 import { getAccessibleStudyById } from "@/lib/data/studies";
+import { getRestoredSubmissionScreenshotValidation } from "@/lib/data/screenshot-ocr";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function AssignmentDetailsPage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const { assignmentId } = await params;
@@ -25,6 +27,14 @@ export default async function AssignmentDetailsPage({ params }: { params: Promis
     getAssignmentRouteGuidance(assignment),
   ]);
   const evidence = await getOwnSubmissionEvidence(submission?.id ?? null, identity.user.id);
+  const screenshotValidation = submission ? await getRestoredSubmissionScreenshotValidation(submission.id) : null;
+  const latestScreenshot = evidence.filter((item) => item.evidence_type === "screenshot").at(-1);
+  let screenshotPreviewUrl = "";
+  if (latestScreenshot) {
+    const supabase = await createClient();
+    const { data } = await supabase.storage.from(latestScreenshot.storage_bucket).createSignedUrl(latestScreenshot.storage_path, 3600);
+    screenshotPreviewUrl = data?.signedUrl ?? "";
+  }
   const operations = canManage ? await getAssignmentOperationalSummary(assignment.id) : null;
-  return <AssignmentDetails study={study} assignment={assignment} routeGuidance={routeGuidance} submission={submission} technicalProfile={technicalProfile} evidence={evidence} currentUserId={identity.user.id} canManage={canManage} operations={operations} />;
+  return <AssignmentDetails study={study} assignment={assignment} routeGuidance={routeGuidance} submission={submission} technicalProfile={technicalProfile} evidence={evidence} screenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} currentUserId={identity.user.id} canManage={canManage} operations={operations} />;
 }
