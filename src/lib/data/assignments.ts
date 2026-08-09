@@ -20,6 +20,9 @@ export interface AssignmentTesterSummary {
   serviceName: string | null;
   platformName: string | null;
   protocolValue: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  testingSynchronization: string | null;
 }
 
 export interface AssignmentSummary extends AssignmentRow {
@@ -170,7 +173,7 @@ export async function createAssignmentBatch(input: CreateAssignmentBatchInput): 
     throw new AssignmentDataError(`Only ${capacity.assignmentsNeeded} assignment ${capacity.assignmentsNeeded === 1 ? "slot" : "slots"} remain for this study target.`);
   }
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_paired_assignment_batch", {
+  const { data, error } = await supabase.rpc("create_paired_assignment_batch_v2", {
     p_study_id: parsed.data.studyId,
     p_protocol_id: parsed.data.protocolId,
     p_route_id: parsed.data.routeId,
@@ -178,8 +181,10 @@ export async function createAssignmentBatch(input: CreateAssignmentBatchInput): 
     p_tester_a_service_id: parsed.data.testerAServiceId,
     p_tester_b_service_id: parsed.data.testerBServiceId,
     p_testing_date: parsed.data.testingDate,
-    p_start_time: parsed.data.startTime,
-    p_end_time: parsed.data.endTime,
+    p_tester_a_start_time: parsed.data.startTime,
+    p_tester_a_end_time: parsed.data.endTime,
+    p_tester_b_start_time: parsed.data.testerBStartTime ?? parsed.data.startTime,
+    p_tester_b_end_time: parsed.data.testerBEndTime ?? parsed.data.endTime,
     p_timezone: parsed.data.timezone,
     p_instructions: parsed.data.instructions,
   });
@@ -248,6 +253,9 @@ export async function listStudyAssignments(
           serviceName: slot?.platform_service_id ? services.get(slot.platform_service_id)?.name ?? null : null,
           platformName: slot?.platform_service_id ? platforms.get(services.get(slot.platform_service_id)?.platform_id ?? "") ?? null : null,
           protocolValue: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.protocol_value === "string" ? slot.account_configuration.protocol_value : null,
+          scheduledStart: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.scheduled_start === "string" ? slot.account_configuration.scheduled_start : assignment.scheduled_start,
+          scheduledEnd: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.scheduled_end === "string" ? slot.account_configuration.scheduled_end : assignment.scheduled_end,
+          testingSynchronization: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.testing_synchronization === "string" ? slot.account_configuration.testing_synchronization : "synchronized",
         };
       }),
   }));

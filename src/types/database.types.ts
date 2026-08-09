@@ -1410,6 +1410,24 @@ export type Database = {
         }
         Returns: Database["public"]["Tables"]["assignments"]["Row"][]
       }
+      create_paired_assignment_batch_v2: {
+        Args: {
+          p_instructions?: string | null
+          p_protocol_id: string
+          p_route_id: string
+          p_study_id: string
+          p_tester_a_end_time: string
+          p_tester_a_service_id: string
+          p_tester_a_start_time: string
+          p_tester_b_end_time: string
+          p_tester_b_service_id: string
+          p_tester_b_start_time: string
+          p_tester_pairs: Json
+          p_testing_date: string
+          p_timezone: string
+        }
+        Returns: Database["public"]["Tables"]["assignments"]["Row"][]
+      }
       list_activity_log_categories: {
         Args: { p_study_id: string }
         Returns: { category: string }[]

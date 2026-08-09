@@ -13,6 +13,9 @@ const labels: Record<string, string> = {
 
 export function normalizedValidationResults(results: MatchedPairValidationResult[]): MatchedPairValidationResult[] {
   return results.filter((result) => !obsoleteRules.has(result.rule_code)).map((result) => {
+    if (result.rule_code === "request_time_gap" && result.observed_difference?.startsWith("Not applicable")) {
+      return { ...result, status: "not_applicable", requirement_level: "advisory", affects_overall_status: false };
+    }
     const a = scalarText(result.tester_a_value);
     const b = scalarText(result.tester_b_value);
     if (result.requirement_level !== "advisory") return { ...result, label: labels[result.rule_code] ?? result.label };

@@ -52,7 +52,7 @@ function ThresholdPreview({ preferred, maximum, unit }: { preferred: number; max
   return <div className="grid grid-cols-3 divide-x divide-border rounded-md border border-border text-center text-xs"><div className="p-3"><span className="font-medium text-emerald-500">Pass</span><span className="mt-1 block text-muted-foreground">0-{preferred} {unit}</span></div><div className="p-3"><span className="font-medium text-amber-500">Warning</span><span className="mt-1 block text-muted-foreground">&gt;{preferred}-{maximum} {unit}</span></div><div className="p-3"><span className="font-medium text-destructive">Fail</span><span className="mt-1 block text-muted-foreground">&gt;{maximum} {unit}</span></div></div>;
 }
 
-export function ValidationThresholdsForm({ studyId, protocolId, configuration }: { studyId: string; protocolId: string; configuration: Json }) {
+export function ValidationThresholdsForm({ studyId, protocolId, configuration, asynchronousTesting = false }: { studyId: string; protocolId: string; configuration: Json; asynchronousTesting?: boolean }) {
   const initial = readThresholds(configuration);
   const [values, setValues] = useState(initial.values);
   const [saved, setSaved] = useState(initial.values);
@@ -68,7 +68,7 @@ export function ValidationThresholdsForm({ studyId, protocolId, configuration }:
   }
 
   function save() {
-    if (!Number.isInteger(values.preferredTime) || values.preferredTime < 1 || values.maximumTime <= values.preferredTime) {
+    if (!asynchronousTesting && (!Number.isInteger(values.preferredTime) || values.preferredTime < 1 || values.maximumTime <= values.preferredTime)) {
       setError("Maximum request-time gap must exceed the preferred gap.");
       return;
     }
@@ -102,7 +102,7 @@ export function ValidationThresholdsForm({ studyId, protocolId, configuration }:
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><h2 className="mt-1.5 text-lg font-semibold">Validation thresholds</h2></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className="space-y-4"><h3 className="text-sm font-semibold">Request-time gap</h3><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="preferred-time-gap">Preferred maximum (seconds)</Label><Input id="preferred-time-gap" type="number" min="1" max="3599" value={values.preferredTime} onChange={(event) => update("preferredTime", event.target.value)} /></div><div className="space-y-2"><Label htmlFor="maximum-time-gap">Failure boundary (seconds)</Label><Input id="maximum-time-gap" type="number" min="2" max="3600" value={values.maximumTime} onChange={(event) => update("maximumTime", event.target.value)} /></div></div><ThresholdPreview preferred={values.preferredTime} maximum={values.maximumTime} unit="sec" /></div>
+        <div className="space-y-4"><h3 className="text-sm font-semibold">Request-time gap</h3>{asynchronousTesting ? <div className="rounded-md border border-border bg-secondary/20 px-4 py-4"><p className="text-sm font-medium">Not applicable by study design</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Tester A and Tester B use separate enforced windows. Location-distance and pickup-proximity thresholds remain active.</p></div> : <><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="preferred-time-gap">Preferred maximum (seconds)</Label><Input id="preferred-time-gap" type="number" min="1" max="3599" value={values.preferredTime} onChange={(event) => update("preferredTime", event.target.value)} /></div><div className="space-y-2"><Label htmlFor="maximum-time-gap">Failure boundary (seconds)</Label><Input id="maximum-time-gap" type="number" min="2" max="3600" value={values.maximumTime} onChange={(event) => update("maximumTime", event.target.value)} /></div></div><ThresholdPreview preferred={values.preferredTime} maximum={values.maximumTime} unit="sec" /></>}</div>
         <div className="space-y-4"><h3 className="text-sm font-semibold">Location-distance gap</h3><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="preferred-location-gap">Preferred maximum (feet)</Label><Input id="preferred-location-gap" type="number" min="1" max="5279" value={values.preferredLocation} onChange={(event) => update("preferredLocation", event.target.value)} /></div><div className="space-y-2"><Label htmlFor="maximum-location-gap">Failure boundary (feet)</Label><Input id="maximum-location-gap" type="number" min="2" max="5280" value={values.maximumLocation} onChange={(event) => update("maximumLocation", event.target.value)} /></div></div><ThresholdPreview preferred={values.preferredLocation} maximum={values.maximumLocation} unit="ft" /></div>
       </div>
 

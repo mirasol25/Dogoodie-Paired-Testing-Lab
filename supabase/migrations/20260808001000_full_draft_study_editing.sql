@@ -83,6 +83,7 @@ begin
     configuration = configuration || jsonb_build_object(
       'platform_service_ids', to_jsonb(service_ids), 'tester_a_service_id', service_a, 'tester_b_service_id', service_b,
       'device_comparison_design', device_design,
+      'testing_synchronization', coalesce(p_payload ->> 'testing_synchronization', 'synchronized'),
       'tester_a_operating_system', p_payload ->> 'tester_a_operating_system',
       'tester_b_operating_system', p_payload ->> 'tester_b_operating_system'
     ) where id = p_study_id returning * into saved;

@@ -42,10 +42,15 @@ export const createAssignmentBatchSchema = assignmentSetupSchema.and(z.object({
   testerPairs: z.array(assignmentTesterPairSchema).min(1, "Add at least one tester pair.").max(50),
   timezone: z.string().trim().min(1).max(100),
   instructions: z.string().trim().max(1000).optional().transform((value) => value || null),
+  testerBStartTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  testerBEndTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
 })).superRefine((values, context) => {
   const selected = values.testerPairs.flatMap((pair) => [pair.testerAId, pair.testerBId]);
   if (new Set(selected).size !== selected.length) {
     context.addIssue({ code: "custom", path: ["testerPairs"], message: "A tester can be assigned only once in a batch." });
+  }
+  if (values.testerBStartTime && values.testerBEndTime && values.testerBEndTime <= values.testerBStartTime) {
+    context.addIssue({ code: "custom", path: ["testerBEndTime"], message: "Tester B's window must end after it starts." });
   }
 });
 

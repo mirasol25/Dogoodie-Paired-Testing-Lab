@@ -256,6 +256,7 @@ export async function updateFullDraftStudy(studyId: string, input: CreateStudyWi
     route_notes: parsed.data.routeNotes, platform_service_ids: parsed.data.platformServiceIds,
     tester_a_service_id: parsed.data.testerAServiceId, tester_b_service_id: parsed.data.testerBServiceId,
     device_comparison_design: parsed.data.deviceComparisonDesign,
+    testing_synchronization: parsed.data.testingSynchronization,
     tester_a_operating_system: parsed.data.testerAOperatingSystem, tester_b_operating_system: parsed.data.testerBOperatingSystem,
   } });
   if (error) throw new StudyDataError(error.message || "The study could not be updated.", error.code === "42501" ? "FORBIDDEN" : "VALIDATION");
@@ -316,6 +317,7 @@ export async function createStudyWithInitialRoute(
     .update({ configuration: {
       ...configuration,
       device_comparison_design: parsed.data.deviceComparisonDesign,
+      testing_synchronization: parsed.data.testingSynchronization,
       tester_a_operating_system: parsed.data.testerAOperatingSystem,
       tester_b_operating_system: parsed.data.testerBOperatingSystem,
     } })

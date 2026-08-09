@@ -77,7 +77,7 @@ export function AssignmentsClient({ study, assignments, setupOptions, testerOpti
               <TableCell className="min-w-40"><p className="mono font-semibold">{assignment.assignment_code}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{assignment.protocolCode} v{assignment.protocolVersion}</p></TableCell>
               <TableCell className="min-w-44"><p className="font-medium">{testerA?.displayName ?? "Unassigned"}</p><p className="mt-1 text-[10px] capitalize text-muted-foreground">{testerA?.status?.replaceAll("_", " ") ?? "Slot pending"}</p></TableCell>
               <TableCell className="min-w-44"><p className="font-medium">{testerB?.displayName ?? "Unassigned"}</p><p className="mt-1 text-[10px] capitalize text-muted-foreground">{testerB?.status?.replaceAll("_", " ") ?? "Slot pending"}</p></TableCell>
-              <TableCell className="min-w-44 whitespace-nowrap"><p>{start.date}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{start.time} - {end.time}</p></TableCell>
+              <TableCell className="min-w-52 whitespace-nowrap">{testerA?.testingSynchronization === "asynchronous" ? <div className="space-y-1.5 text-[10px]"><p><span className="text-primary">Tester A</span> {formatSchedule(testerA.scheduledStart, study.display_timezone).time} - {formatSchedule(testerA.scheduledEnd, study.display_timezone).time}</p><p><span className="text-amber-400">Tester B</span> {formatSchedule(testerB?.scheduledStart ?? null, study.display_timezone).time} - {formatSchedule(testerB?.scheduledEnd ?? null, study.display_timezone).time}</p><p className="text-muted-foreground">{start.date} · Separate windows</p></div> : <><p>{start.date}</p><p className="mono mt-1 text-[10px] text-muted-foreground">{start.time} - {end.time}</p></>}</TableCell>
               <TableCell className="min-w-64 text-xs"><p>{assignment.pickup_location}</p><p className="mt-1 text-muted-foreground">to {assignment.destination_location}</p></TableCell>
               <TableCell><StatusBadge status={assignment.status} /></TableCell>
               <TableCell><Button asChild size="icon-sm" variant="ghost"><Link href={`/paired-testing-demo/assignments/${assignment.id}`} aria-label={`Open ${assignment.assignment_code}`}><ArrowRight className="size-4" /></Link></Button></TableCell>
@@ -115,12 +115,15 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [pending, startTransition] = useTransition();
   const protocolId = options.protocols[0]?.id ?? "";
+  const selectedProtocol = options.protocols.find((protocol) => protocol.id === protocolId);
   const routeId = options.routes[0]?.id ?? "";
   const testerAServiceId = defaultService;
   const testerBServiceId = defaultTesterBService;
   const [testingDate, setTestingDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [testerBStartTime, setTesterBStartTime] = useState("");
+  const [testerBEndTime, setTesterBEndTime] = useState("");
   const [testerPairs, setTesterPairs] = useState([{ testerAId: "", testerBId: "" }]);
   const [instructions, setInstructions] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -130,12 +133,16 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
   const timezone = selectedRoute?.timezone || study.display_timezone || "UTC";
   const testerAService = options.services.find((service) => service.id === testerAServiceId);
   const deviceComparisonDesign = typeof configuration.device_comparison_design === "string" ? configuration.device_comparison_design : "uncontrolled";
+  const asynchronousTesting = configuration.testing_synchronization === "asynchronous";
   const restrictsOperatingSystems = deviceComparisonDesign === "same_operating_system" || deviceComparisonDesign === "different_operating_system";
   const testerAOperatingSystem = restrictsOperatingSystems && typeof configuration.tester_a_operating_system === "string" ? configuration.tester_a_operating_system : null;
   const testerBOperatingSystem = typeof configuration.tester_b_operating_system === "string" ? configuration.tester_b_operating_system : testerAOperatingSystem;
   const testerAOptions = testerAOperatingSystem ? testers.filter((tester) => tester.operatingSystem?.toLowerCase() === testerAOperatingSystem.toLowerCase()) : testers;
   const testerBOptions = testerBOperatingSystem ? testers.filter((tester) => tester.operatingSystem?.toLowerCase() === testerBOperatingSystem.toLowerCase()) : testers;
   const currentStudyDateTime = localInputValue(new Date().toISOString(), timezone);
+  const formattedTesterAEndTime = endTime
+    ? new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(`2020-01-01T${endTime}:00Z`))
+    : null;
   const minimumDate = [currentStudyDateTime.slice(0, 10), localInputValue(study.testing_starts_at, timezone).slice(0, 10)].filter(Boolean).sort().at(-1) ?? "";
   const maximumDate = localInputValue(study.testing_ends_at, timezone).slice(0, 10);
   const setupReady = options.protocols.length > 0 && options.routes.length > 0 && Boolean(testerAServiceId) && Boolean(testerBServiceId) && testerAOptions.length > 0 && testerBOptions.length > 0;
@@ -149,6 +156,8 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
     setTestingDate("");
     setStartTime("");
     setEndTime("");
+    setTesterBStartTime("");
+    setTesterBEndTime("");
     setTesterPairs([{ testerAId: "", testerBId: "" }]);
     setInstructions("");
     setErrors({});
@@ -184,9 +193,17 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
     if (!parsed.success) parsed.error.issues.forEach((issue) => { nextErrors[String(issue.path[0])] ??= issue.message; });
     const startsAt = testingDate && startTime ? fromZonedTime(`${testingDate}T${startTime}`, timezone) : null;
     const endsAt = testingDate && endTime ? fromZonedTime(`${testingDate}T${endTime}`, timezone) : null;
+    const testerBStartsAt = testingDate && testerBStartTime ? fromZonedTime(`${testingDate}T${testerBStartTime}`, timezone) : startsAt;
+    const testerBEndsAt = testingDate && testerBEndTime ? fromZonedTime(`${testingDate}T${testerBEndTime}`, timezone) : endsAt;
+    if (asynchronousTesting && !testerBStartTime) nextErrors.testerBStartTime = "Select Tester B's start time.";
+    if (asynchronousTesting && !testerBEndTime) nextErrors.testerBEndTime = "Select Tester B's end time.";
+    if (asynchronousTesting && endTime && testerBStartTime && testerBStartTime < endTime) nextErrors.testerBStartTime = "Tester B must start when or after Tester A's window ends.";
+    if (testerBStartTime && testerBEndTime && testerBEndTime <= testerBStartTime) nextErrors.testerBEndTime = "Tester B's window must end after it starts.";
     if (startsAt && startsAt <= new Date()) nextErrors.startTime = "The testing window must be in the future in the route timezone.";
     if (startsAt && study.testing_starts_at && startsAt < new Date(study.testing_starts_at)) nextErrors.testingDate = "The assignment starts before the study testing period.";
     if (endsAt && study.testing_ends_at && endsAt > new Date(study.testing_ends_at)) nextErrors.endTime = "The assignment ends after the study testing period.";
+    if (testerBStartsAt && testerBStartsAt <= new Date()) nextErrors.testerBStartTime = "Tester B's window must be in the future.";
+    if (testerBEndsAt && study.testing_ends_at && testerBEndsAt > new Date(study.testing_ends_at)) nextErrors.testerBEndTime = "Tester B's window ends after the study testing period.";
     if (isCrossPlatform) {
       const serviceB = options.services.find((service) => service.id === testerBServiceId);
       if (testerAService && serviceB && (testerAService.platformId === serviceB.platformId || testerAService.normalizedCategory !== serviceB.normalizedCategory)) {
@@ -216,7 +233,7 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
 
   function submitAssignmentBatch() {
     startTransition(async () => {
-      const result = await createAssignmentBatchAction({ studyId: study.id, protocolId, routeId, testerAServiceId, testerBServiceId, testingDate, startTime, endTime, testerPairs, timezone, instructions });
+      const result = await createAssignmentBatchAction({ studyId: study.id, protocolId, routeId, testerAServiceId, testerBServiceId, testingDate, startTime, endTime, testerBStartTime: asynchronousTesting ? testerBStartTime : startTime, testerBEndTime: asynchronousTesting ? testerBEndTime : endTime, testerPairs, timezone, instructions });
       if (!result.ok) {
         toast.error(result.message);
         return;
@@ -253,16 +270,17 @@ function AssignmentSetupDialog({ study, options, testers, capacity }: { study: S
           <LockedField label="Tester B provider and tier" value={options.services.find((service) => service.id === testerBServiceId) ? `${options.services.find((service) => service.id === testerBServiceId)?.platformName} - ${options.services.find((service) => service.id === testerBServiceId)?.serviceName}` : "Unavailable"} detail={isCrossPlatform ? testerAService?.normalizedCategory.replaceAll("_", " ") : testerAServiceId === testerBServiceId ? "Same provider and tier" : "Same provider; different ride tier"} />
         </div>
         </section>
-        <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-sm font-semibold">Testing window</p><p className="mt-1 text-xs text-muted-foreground">One synchronized session per tester pair</p></div><div className="text-right"><p className="mono text-[10px] font-medium text-primary">{timezone}</p><p className="mt-1 text-[10px] text-muted-foreground">{currentStudyDateTime.replace("T", " ")}</p></div></div>
-        <div className="grid gap-4 sm:grid-cols-4">
-          <DateTimeField type="date" label="Testing date" value={testingDate} onChange={(value) => { setTestingDate(value); setErrors({}); }} min={minimumDate} max={maximumDate || undefined} error={errors.testingDate} />
-          <DateTimeField type="time" label="Window starts" value={startTime} onChange={(value) => { setStartTime(value); setErrors({}); }} error={errors.startTime} />
-          <DateTimeField type="time" label="Window ends" value={endTime} onChange={(value) => { setEndTime(value); setErrors({}); }} min={startTime || undefined} error={errors.endTime} />
-          <div className="space-y-2"><Label htmlFor="assignment-pair-count">Paired sessions</Label><Input id="assignment-pair-count" type="number" min={1} max={maximumPairs} value={testerPairs.length} onChange={(event) => setPairCount(Number(event.target.value))} /><p className="text-[10px] text-muted-foreground">Up to {maximumPairs} using distinct testers.</p></div>
-        </div>
+        <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex flex-wrap items-end justify-between gap-2"><div><p className="text-sm font-semibold">{asynchronousTesting ? "Tester-side testing windows" : "Testing window"}</p><p className="mt-1 text-xs text-muted-foreground">{asynchronousTesting ? "The request-time gap is not applicable; both location checks remain active." : "One synchronized session per tester pair"}</p></div><div className="text-right"><p className="mono text-[10px] font-medium text-primary">{timezone}</p><p className="mt-1 text-[10px] text-muted-foreground">{currentStudyDateTime.replace("T", " ")}</p></div></div>
+        {asynchronousTesting ? <div className="space-y-4">
+          <div className="grid gap-4 border-b border-border pb-4 sm:grid-cols-2"><DateTimeField type="date" label="Shared testing date" value={testingDate} onChange={(value) => { setTestingDate(value); setErrors({}); }} min={minimumDate} max={maximumDate || undefined} error={errors.testingDate} /><div className="space-y-2"><Label htmlFor="assignment-pair-count">Paired sessions</Label><Input id="assignment-pair-count" type="number" min={1} max={maximumPairs} value={testerPairs.length} onChange={(event) => setPairCount(Number(event.target.value))} /><p className="text-[10px] text-muted-foreground">Up to {maximumPairs} using distinct testers.</p></div></div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <section className="overflow-hidden rounded-md border border-border border-t-2 border-t-primary"><div className="min-h-[5.25rem] border-b border-border bg-secondary/20 px-4 py-3"><p className="text-[10px] uppercase text-primary">Tester A</p><p className="mt-1 text-sm font-semibold">First testing window</p><p className="mt-1 text-[10px] text-muted-foreground">Complete the first scheduled testing period.</p></div><div className="border-b border-border px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">Assigned condition - {selectedProtocol?.isolatedVariable ?? "Protocol variable"}</p><p className="mt-1 text-sm font-medium">{selectedProtocol?.testerAValue ?? "Not configured"}</p></div><div className="grid min-h-[7.5rem] content-start gap-4 p-4 sm:grid-cols-2"><DateTimeField type="time" label="Starts" value={startTime} onChange={(value) => { setStartTime(value); setErrors({}); }} error={errors.startTime} /><DateTimeField type="time" label="Ends" value={endTime} onChange={(value) => { setEndTime(value); if (testerBStartTime && testerBStartTime < value) { setTesterBStartTime(""); setTesterBEndTime(""); } setErrors({}); }} min={startTime || undefined} error={errors.endTime} /></div></section>
+            <section className="overflow-hidden rounded-md border border-border border-t-2 border-t-amber-400"><div className="min-h-[5.25rem] border-b border-border bg-secondary/20 px-4 py-3"><p className="text-[10px] uppercase text-amber-400">Tester B</p><p className="mt-1 text-sm font-semibold">Second testing window</p><p className="mt-1 text-[10px] text-muted-foreground">Start at or after Tester A finishes{formattedTesterAEndTime ? ` at ${formattedTesterAEndTime}` : ""}.</p></div><div className="border-b border-border px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">Assigned condition - {selectedProtocol?.isolatedVariable ?? "Protocol variable"}</p><p className="mt-1 text-sm font-medium">{selectedProtocol?.testerBValue ?? "Not configured"}</p></div><div className="grid min-h-[7.5rem] content-start gap-4 p-4 sm:grid-cols-2"><DateTimeField type="time" label="Starts" value={testerBStartTime} onChange={(value) => { setTesterBStartTime(value); if (testerBEndTime && testerBEndTime <= value) setTesterBEndTime(""); setErrors({}); }} min={endTime || undefined} error={errors.testerBStartTime} /><DateTimeField type="time" label="Ends" value={testerBEndTime} onChange={(value) => { setTesterBEndTime(value); setErrors({}); }} min={testerBStartTime || endTime || undefined} error={errors.testerBEndTime} /></div></section>
+          </div>
+        </div> : <div className="grid gap-4 sm:grid-cols-4"><DateTimeField type="date" label="Testing date" value={testingDate} onChange={(value) => { setTestingDate(value); setErrors({}); }} min={minimumDate} max={maximumDate || undefined} error={errors.testingDate} /><DateTimeField type="time" label="Window starts" value={startTime} onChange={(value) => { setStartTime(value); setErrors({}); }} error={errors.startTime} /><DateTimeField type="time" label="Window ends" value={endTime} onChange={(value) => { setEndTime(value); setErrors({}); }} min={startTime || undefined} error={errors.endTime} /><div className="space-y-2"><Label htmlFor="assignment-pair-count">Paired sessions</Label><Input id="assignment-pair-count" type="number" min={1} max={maximumPairs} value={testerPairs.length} onChange={(event) => setPairCount(Number(event.target.value))} /><p className="text-[10px] text-muted-foreground">Up to {maximumPairs} using distinct testers.</p></div></div>}
         <p className="text-[11px] text-muted-foreground">Schedule interpreted in the route timezone.</p></section>
         <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={continueToPair}>Continue</Button></div>
-        </> : step === 1 ? <TesterPairStep protocol={options.protocols.find((protocol) => protocol.id === protocolId)} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} testerAOptions={testerAOptions} testerBOptions={testerBOptions} testerAOperatingSystem={testerAOperatingSystem} testerBOperatingSystem={testerBOperatingSystem} pairs={testerPairs} errors={errors} onChange={updateTesterPair} onBack={() => { setStep(0); setErrors({}); }} onContinue={continueToReview} /> : <AssignmentReview study={study} protocol={options.protocols.find((protocol) => protocol.id === protocolId)} route={selectedRoute} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} pairs={testerPairs} testingDate={testingDate} startTime={startTime} endTime={endTime} timezone={timezone} instructions={instructions} pending={pending} onInstructionsChange={setInstructions} onBack={() => setStep(1)} onCreate={submitAssignmentBatch} />}
+        </> : step === 1 ? <TesterPairStep protocol={options.protocols.find((protocol) => protocol.id === protocolId)} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} testerAOptions={testerAOptions} testerBOptions={testerBOptions} testerAOperatingSystem={testerAOperatingSystem} testerBOperatingSystem={testerBOperatingSystem} pairs={testerPairs} errors={errors} onChange={updateTesterPair} onBack={() => { setStep(0); setErrors({}); }} onContinue={continueToReview} /> : <AssignmentReview study={study} protocol={options.protocols.find((protocol) => protocol.id === protocolId)} route={selectedRoute} serviceA={options.services.find((service) => service.id === testerAServiceId)} serviceB={options.services.find((service) => service.id === testerBServiceId)} testers={testers} pairs={testerPairs} testingDate={testingDate} startTime={startTime} endTime={endTime} testerBStartTime={asynchronousTesting ? testerBStartTime : startTime} testerBEndTime={asynchronousTesting ? testerBEndTime : endTime} asynchronousTesting={asynchronousTesting} timezone={timezone} instructions={instructions} pending={pending} onInstructionsChange={setInstructions} onBack={() => setStep(1)} onCreate={submitAssignmentBatch} />}
       </div>}
     </DialogContent>
   </Dialog>;
@@ -291,7 +309,7 @@ function TesterSide({ side, condition, variable, service, expectedOperatingSyste
   return <section className={`min-w-0 overflow-hidden rounded-md border border-border border-t-2 ${side === "Tester A" ? "border-t-primary" : "border-t-amber-400"}`}><div className="border-b border-border bg-secondary/20 px-4 py-3"><p className="text-sm font-semibold">{side}</p><p className="mt-1 text-xs text-muted-foreground">{service}{expectedOperatingSystem ? ` · ${expectedOperatingSystem}` : ""}</p></div><div className="space-y-4 p-4"><SelectField label="Tester account" value={selectedId} onChange={onChange} error={error} options={testers.map((tester) => ({ value: tester.id, label: `${tester.displayName} · ${tester.deviceType ?? "Device unavailable"} · ${tester.operatingSystem ?? "OS unavailable"} ${tester.operatingSystemVersion ?? ""}` }))} /><div className="border-t border-border pt-3"><p className="text-[10px] uppercase text-muted-foreground">Assigned condition - {variable}</p><p className="mt-1 text-sm font-medium">{condition}</p>{selected ? <p className="mt-1 break-all text-[10px] text-muted-foreground">{selected.email}</p> : null}</div></div></section>;
 }
 
-function AssignmentReview({ study, protocol, route, serviceA, serviceB, testers, pairs, testingDate, startTime, endTime, timezone, instructions, pending, onInstructionsChange, onBack, onCreate }: { study: Study; protocol?: AssignmentSetupOptions["protocols"][number]; route?: AssignmentSetupOptions["routes"][number]; serviceA?: AssignmentSetupOptions["services"][number]; serviceB?: AssignmentSetupOptions["services"][number]; testers: AssignmentTesterOption[]; pairs: Array<{ testerAId: string; testerBId: string }>; testingDate: string; startTime: string; endTime: string; timezone: string; instructions: string; pending: boolean; onInstructionsChange: (value: string) => void; onBack: () => void; onCreate: () => void }) {
+function AssignmentReview({ study, protocol, route, serviceA, serviceB, testers, pairs, testingDate, startTime, endTime, testerBStartTime, testerBEndTime, asynchronousTesting, timezone, instructions, pending, onInstructionsChange, onBack, onCreate }: { study: Study; protocol?: AssignmentSetupOptions["protocols"][number]; route?: AssignmentSetupOptions["routes"][number]; serviceA?: AssignmentSetupOptions["services"][number]; serviceB?: AssignmentSetupOptions["services"][number]; testers: AssignmentTesterOption[]; pairs: Array<{ testerAId: string; testerBId: string }>; testingDate: string; startTime: string; endTime: string; testerBStartTime: string; testerBEndTime: string; asynchronousTesting: boolean; timezone: string; instructions: string; pending: boolean; onInstructionsChange: (value: string) => void; onBack: () => void; onCreate: () => void }) {
   const formatTime = (value: string) => {
     const [hours, minutes] = value.split(":").map(Number);
     return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2020, 0, 1, hours, minutes)));
@@ -303,7 +321,8 @@ function AssignmentReview({ study, protocol, route, serviceA, serviceB, testers,
       <ReviewItem label="Study" value={study.name} detail={study.study_code} />
       <ReviewItem label="Protocol" value={protocol?.title ?? "Unavailable"} detail={protocol ? `${protocol.code} v${protocol.version}` : undefined} />
       <ReviewItem label="Route" value={route?.name ?? "Unavailable"} detail={route ? `${route.pickup} to ${route.destination}` : undefined} />
-      <ReviewItem label="Testing window" value={`${dateLabel}, ${formatTime(startTime)}-${formatTime(endTime)}`} detail={timezone} />
+      <ReviewItem label={asynchronousTesting ? "Tester A window" : "Testing window"} value={`${dateLabel}, ${formatTime(startTime)}-${formatTime(endTime)}`} detail={timezone} />
+      {asynchronousTesting ? <ReviewItem label="Tester B window" value={`${dateLabel}, ${formatTime(testerBStartTime)}-${formatTime(testerBEndTime)}`} detail="Request-time synchronization not applicable" /> : null}
     </div>
     <div className="divide-y divide-border overflow-hidden rounded-md border border-border">{pairs.map((pair, index) => <div key={index} className="grid gap-3 p-4 sm:grid-cols-[7rem_1fr_1fr]"><p className="text-xs font-semibold">Pair {index + 1}</p><ReviewTester side="Tester A" tester={testers.find((tester) => tester.id === pair.testerAId)} service={serviceA} variable={protocol?.isolatedVariable} condition={protocol?.testerAValue} /><ReviewTester side="Tester B" tester={testers.find((tester) => tester.id === pair.testerBId)} service={serviceB} variable={protocol?.isolatedVariable} condition={protocol?.testerBValue} /></div>)}</div>
     <div className="space-y-2"><Label htmlFor="assignment-instructions">Operational instructions <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="assignment-instructions" value={instructions} onChange={(event) => onInstructionsChange(event.target.value)} maxLength={1000} rows={3} placeholder="Add session-specific coordination or route reminders." /><p className="text-xs text-muted-foreground">These instructions supplement the active protocol and cannot change its conditions.</p></div>

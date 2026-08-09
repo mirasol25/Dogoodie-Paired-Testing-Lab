@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { configuredStudyServices } from "@/components/paired-testing/shared/study-service-context";
+import { configuredStudyServiceSides } from "@/components/paired-testing/shared/study-service-context";
 import { demoConfig } from "@/config/paired-testing-demo.config";
 import type { ProviderServiceOption, Study } from "@/lib/data/studies";
 import type { Protocol } from "@/lib/data/protocols";
@@ -41,13 +41,19 @@ export function PrintReportClient({
   activityTotal: number;
 }) {
   const classification = classifyReportPairs(pairs, reviews);
+  const studyConfiguration = study.configuration && typeof study.configuration === "object" && !Array.isArray(study.configuration) ? study.configuration as Record<string, unknown> : {};
+  const asynchronousTesting = studyConfiguration.testing_synchronization === "asynchronous";
+  const deviceDesign = typeof studyConfiguration.device_comparison_design === "string" ? studyConfiguration.device_comparison_design : "uncontrolled";
+  const osLabel = deviceDesign === "uncontrolled" ? "No operating-system restriction" : deviceDesign === "same_operating_system" ? `Both testers: ${String(studyConfiguration.tester_a_operating_system ?? "Not recorded")}` : `Tester A: ${String(studyConfiguration.tester_a_operating_system ?? "Not recorded")} / Tester B: ${String(studyConfiguration.tester_b_operating_system ?? "Not recorded")}`;
   const latest = classification.latest;
   const accepted = classification.included;
   const excluded = classification.excluded;
   const acceptedWithException = accepted.filter((pair) => latest.get(pair.id)?.technical_exception).length;
   const acceptedNormally = accepted.length - acceptedWithException;
   const rejected = pairs.filter((pair) => latest.get(pair.id)?.status === "rejected").length;
-  const serviceLabel = configuredStudyServices(study, serviceOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ") || "Not configured";
+  const serviceSides = configuredStudyServiceSides(study, serviceOptions);
+  const testerAServiceLabel = serviceSides.testerA ? `${serviceSides.testerA.platformName} - ${serviceSides.testerA.serviceName}` : "Not configured";
+  const testerBServiceLabel = serviceSides.testerB ? `${serviceSides.testerB.platformName} - ${serviceSides.testerB.serviceName}` : testerAServiceLabel;
   const reportStage = ["completed", "archived"].includes(study.status) ? "Final descriptive report" : "Interim descriptive report";
   const disposition = assignmentDisposition(assignments);
   const evidenceComplete = pairs.filter(
@@ -143,10 +149,10 @@ export function PrintReportClient({
             />
           ))}
         </div>
-        <p className="mt-4 leading-6">{acceptedNormally} pair{acceptedNormally === 1 ? "" : "s"} were accepted without an exception, {acceptedWithException} pair{acceptedWithException === 1 ? "" : "s"} were accepted with a documented technical exception, {excluded.length} pair{excluded.length === 1 ? "" : "s"} were rejected, and {classification.pending.length} pair{classification.pending.length === 1 ? "" : "s"} remain pending review. {meanVariance === null ? "No included pair has a recorded fare variance." : `Across included pairs with recorded fares, the mean directional variance was ${meanVariance.toFixed(2)}% and the median was ${medianVariance?.toFixed(2)}%. Positive values mean Tester B received the higher fare.`}</p>
+        <p className="mt-4 leading-6">{acceptedNormally} pair{acceptedNormally === 1 ? "" : "s"} were accepted without an exception, {acceptedWithException} pair{acceptedWithException === 1 ? "" : "s"} were accepted with a documented technical exception, {excluded.length} pair{excluded.length === 1 ? "" : "s"} were rejected, and {classification.pending.length} pair{classification.pending.length === 1 ? "" : "s"} remain pending review. {meanVariance === null ? "No included pair has a recorded fare variance." : `Across included pairs with recorded fares, the mean directional variance was ${meanVariance.toFixed(2)}% and the median was ${medianVariance?.toFixed(2)}%. Positive values mean Tester B received the higher fare.`} {asynchronousTesting ? "Because observations used separate tester windows, time-related market effects remain a possible alternative explanation." : ""}</p>
       </Section>
       <Section title="2. Study design">
-        <p className="leading-6">Two assigned testers collected contemporaneous fare observations for the locked route, provider or service tier, testing window, and protocol conditions. The system compared the submissions using the active protocol, retained required evidence and system metadata, and separated deterministic technical validation from expert review.</p>
+        <p className="leading-6">Two assigned testers collected {asynchronousTesting ? "sequential fare observations in separately enforced tester windows" : "synchronized fare observations in one shared testing window"} for the locked route, side-specific provider or service tier, and protocol conditions. The system compared the submissions using the active protocol, retained required evidence and system metadata, and separated deterministic technical validation from expert review.</p>
       </Section>
       <Section title="3. Study context">
         <dl className="grid grid-cols-2 gap-x-8">
@@ -154,8 +160,11 @@ export function PrintReportClient({
             ["Study code", study.study_code],
             ["Status", study.status],
             ["Currency", study.default_currency ?? "Not set"],
-            ["Testing service", serviceLabel],
+            ["Tester A service", testerAServiceLabel],
+            ["Tester B service", testerBServiceLabel],
             ["Comparison mode", study.study_type === "cross_platform_comparison" ? "Cross-platform comparison" : "Within-platform comparison"],
+            ["Testing synchronization", asynchronousTesting ? "Separate tester windows" : "Synchronized paired session"],
+            ["Operating-system control", osLabel],
             ["Pickup", route?.pickup ?? "Not recorded"],
             ["Destination", route?.destination ?? "Not recorded"],
             ["Timezone", study.display_timezone],
@@ -186,14 +195,14 @@ export function PrintReportClient({
         <div className="mt-3 grid grid-cols-2 gap-3"><PrintMetric label="Tester A condition" value={protocol?.tester_a_value ?? "Not recorded"} /><PrintMetric label="Tester B condition" value={protocol?.tester_b_value ?? "Not recorded"} /></div>
       </Section>
       <Section title="5. Protocol controls">
-        <ul className="space-y-1 leading-5"><li>Matched controls: route, provider and ride tier, currency, pickup, destination, and protocol conditions.</li><li>Request-time threshold: {formatThreshold(requestTimeThreshold)}.</li><li>Location threshold: {formatThreshold(locationThreshold)}.</li><li>Required evidence: quote screenshot, screen recording, and system-generated metadata.</li></ul>
+        <ul className="space-y-1 leading-5"><li>Side-specific service control: each tester must use the provider and ride tier assigned to that protocol side.</li><li>{asynchronousTesting ? "Request-time synchronization: not applicable by study design; separate tester windows were enforced." : `Request-time threshold: ${formatThreshold(requestTimeThreshold)}.`}</li><li>Location threshold: {formatThreshold(locationThreshold)}. Tester-to-tester distance and each tester&apos;s pickup proximity remain validated.</li><li>Operating-system control: {osLabel}.</li><li>Required evidence: quote screenshot, screen recording, and system-generated metadata.</li></ul>
       </Section>
       <Section title="6. Descriptive fare results">
         <div className="grid grid-cols-3 gap-2"><PrintMetric label="Average signed variance" value={meanVariance === null ? "-" : `${meanVariance.toFixed(2)}%`} /><PrintMetric label="Median signed variance" value={medianVariance === null ? "-" : `${medianVariance.toFixed(2)}%`} /><PrintMetric label="Largest absolute variance" value={largestIncludedPair?.percentage_fare_difference === null || !largestIncludedPair ? "-" : `${Math.abs(largestIncludedPair.percentage_fare_difference).toFixed(2)}%`} /><PrintMetric label="Technical validation rate" value={technicalValidationRate === null ? "-" : `${technicalValidationRate.toFixed(1)}%`} /><PrintMetric label="Review acceptance rate" value={reviewAcceptanceRate === null ? "-" : `${reviewAcceptanceRate.toFixed(1)}%`} /><PrintMetric label="Matched pairs / submissions" value={`${pairs.length} / ${pairs.length * 2}`} /></div>
         <p className="mt-3 text-[#587065]">Positive signed variance means Tester B received the higher fare. These are descriptive results only.</p>
       </Section>
       <Section title="7. Largest included variance">
-        {largestIncludedPair ? <div className="grid grid-cols-3 gap-2"><PrintMetric label="Pair" value={largestIncludedPair.pair_code} /><PrintMetric label="Tester A quote" value={formatFare(largestIncludedPair.submissionA.displayed_fare, largestIncludedPair.submissionA.currency)} /><PrintMetric label="Tester B quote" value={formatFare(largestIncludedPair.submissionB.displayed_fare, largestIncludedPair.submissionB.currency)} /><PrintMetric label="Variance" value={formatPercent(largestIncludedPair.percentage_fare_difference)} /><PrintMetric label="Timestamp gap" value={largestIncludedPair.timestamp_difference_seconds === null ? "-" : `${largestIncludedPair.timestamp_difference_seconds.toFixed(1)} seconds`} /><PrintMetric label="Technical / review" value={`${largestIncludedPair.technical_status} / ${reviewOutcome(latest.get(largestIncludedPair.id))}`} /></div> : <p>No included pair has a recorded fare difference.</p>}
+        {largestIncludedPair ? <div className="grid grid-cols-3 gap-2"><PrintMetric label="Pair" value={largestIncludedPair.pair_code} /><PrintMetric label="Tester A quote" value={formatFare(largestIncludedPair.submissionA.displayed_fare, largestIncludedPair.submissionA.currency)} /><PrintMetric label="Tester B quote" value={formatFare(largestIncludedPair.submissionB.displayed_fare, largestIncludedPair.submissionB.currency)} /><PrintMetric label="Variance" value={formatPercent(largestIncludedPair.percentage_fare_difference)} /><PrintMetric label="Request-time gap" value={asynchronousTesting ? "Not applicable by study design" : largestIncludedPair.timestamp_difference_seconds === null ? "-" : `${largestIncludedPair.timestamp_difference_seconds.toFixed(1)} seconds`} /><PrintMetric label="Technical / review" value={`${largestIncludedPair.technical_status} / ${reviewOutcome(latest.get(largestIncludedPair.id))}`} /></div> : <p>No included pair has a recorded fare difference.</p>}
         <p className="mt-3 text-[#587065]">This pair is selected mechanically as the included pair with the largest absolute recorded fare difference. It is not evidence of causation, discrimination, or liability.</p>
       </Section>
       <Section title="8. Paired submissions and technical conformance">
@@ -210,17 +219,20 @@ export function PrintReportClient({
         <ol className="list-decimal space-y-1 pl-4">{nextReviewQuestions.map((question) => <li key={question}>{question}</li>)}</ol>
       </Section>
       <div className="mt-10 border-t-2 border-[#17251f] pt-4 print:break-before-page"><p className="text-[10px] font-bold uppercase text-[#587065]">Supporting appendices</p></div>
-      <Section title="A. Assignment disposition">
+      <Section title="A. Assignment testing windows">
+        <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Assignment</Head><Head>Mode</Head><Head>Tester A window</Head><Head>Tester B window</Head></tr></thead><tbody>{assignments.map((assignment) => { const testerA = assignment.testers.find((tester) => tester.slot === "tester_a"); const testerB = assignment.testers.find((tester) => tester.slot === "tester_b"); return <tr key={assignment.id}><Cell>{assignment.assignment_code}</Cell><Cell>{testerA?.testingSynchronization === "asynchronous" ? "Separate windows" : "Synchronized"}</Cell><Cell>{formatReportWindow(testerA?.scheduledStart ?? assignment.scheduled_start, testerA?.scheduledEnd ?? assignment.scheduled_end, study.display_timezone)}</Cell><Cell>{formatReportWindow(testerB?.scheduledStart ?? assignment.scheduled_start, testerB?.scheduledEnd ?? assignment.scheduled_end, study.display_timezone)}</Cell></tr>; })}</tbody></table>
+      </Section>
+      <Section title="B. Assignment disposition">
         <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Total</Head><Head>Completed</Head><Head>Cancelled</Head><Head>Expired</Head><Head>Unfinished</Head></tr></thead><tbody><tr><Cell>{disposition.total}</Cell><Cell>{disposition.completed}</Cell><Cell>{disposition.cancelled}</Cell><Cell>{disposition.expired}</Cell><Cell>{disposition.unfinished}</Cell></tr></tbody></table>
         <p className="mt-2 text-[#587065]">Cancelled and expired assignments are operational exclusions and do not represent observed fare comparisons.</p>
       </Section>
-      <Section title="B. Included pairs">
+      <Section title="C. Included pairs">
         <PairTable pairs={accepted} latest={latest} />
       </Section>
-      <Section title="C. Rejected pairs">
+      <Section title="D. Rejected pairs">
         <PairTable pairs={excluded} latest={latest} />
       </Section>
-      <Section title="D. Reviewer decisions">
+      <Section title="E. Reviewer decisions">
         <table className="w-full text-[8px]">
           <thead>
             <tr className="bg-[#eef1ef]">
@@ -247,14 +259,14 @@ export function PrintReportClient({
           </tbody>
         </table>
       </Section>
-      <Section title="E. Rule-level protocol results">
+      <Section title="F. Rule-level protocol results">
         <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Pair</Head><Head>Rule</Head><Head>Level</Head><Head>Finding</Head><Head>Configured threshold</Head><Head>Result</Head></tr></thead><tbody>{validationResults.map((result) => <tr key={result.id}><Cell>{pairs.find((pair) => pair.id === result.matched_pair_id)?.pair_code ?? result.matched_pair_id}</Cell><Cell>{result.label}</Cell><Cell>{result.requirement_level}</Cell><Cell>{result.observed_difference ?? "-"}</Cell><Cell>{formatThreshold(result.threshold_configuration)}</Cell><Cell>{result.status}</Cell></tr>)}</tbody></table>
       </Section>
-      <Section title="F. Evidence inventory">
+      <Section title="G. Evidence inventory">
         <p className="mb-2 text-[#587065]">{evidence.length} uploaded evidence record{evidence.length === 1 ? "" : "s"}; metadata is available for {evidenceMetadataAvailable}/{evidence.length} evidence record{evidence.length === 1 ? "" : "s"}. System metadata is stored with each evidence record rather than exported as a separate media file.</p>
         <table className="w-full text-[8px]"><thead><tr className="bg-[#eef1ef]"><Head>Evidence</Head><Head>Pair</Head><Head>Tester</Head><Head>Type</Head><Head>Integrity</Head></tr></thead><tbody>{evidence.map((file) => <tr key={file.id}><Cell>{file.evidence_code ?? file.id}</Cell><Cell>{file.pairCode ?? "Unpaired"}</Cell><Cell>{file.testerName}</Cell><Cell>{file.evidence_type}</Cell><Cell>{file.integrity_status}</Cell></tr>)}</tbody></table>
       </Section>
-      <Section title="G. Package inventory">
+      <Section title="H. Package inventory">
         <dl className="grid grid-cols-2 gap-2">
           {[
             ["Evidence records", evidence.length],
@@ -366,6 +378,12 @@ function formatFare(value: number | null, currency: string | null) {
 }
 function formatPercent(value: number | null) {
   return value === null ? "-" : `${value.toFixed(2)}%`;
+}
+function formatReportWindow(start: string | null, end: string | null, timezone: string) {
+  if (!start || !end) return "Not scheduled";
+  const date = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: timezone }).format(new Date(start));
+  const time = new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone: timezone });
+  return `${date}, ${time.format(new Date(start))}-${time.format(new Date(end))}`;
 }
 function formatThreshold(value: MatchedPairValidationResult["threshold_configuration"]) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "Protocol requirement";

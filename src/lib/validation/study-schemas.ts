@@ -82,6 +82,7 @@ export const createStudyWithRouteSchema = z.object({
   deviceComparisonDesign: z.enum(["uncontrolled", "same_operating_system", "different_operating_system"]).default("uncontrolled"),
   testerAOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
   testerBOperatingSystem: z.enum(["iOS", "Android"]).default("iOS"),
+  testingSynchronization: z.enum(["synchronized", "asynchronous"]).default("synchronized"),
 }).superRefine((value, context) => {
   validateSchedule(value, context);
   if (!value.testingStartsAt) {

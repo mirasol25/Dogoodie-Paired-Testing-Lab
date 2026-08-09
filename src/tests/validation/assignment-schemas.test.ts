@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentSetupSchema, assignmentTesterPairSchema } from "@/lib/validation/assignment-schemas";
+import { assignmentSetupSchema, assignmentTesterPairSchema, createAssignmentBatchSchema } from "@/lib/validation/assignment-schemas";
 
 const setup = {
   protocolId: "11111111-1111-4111-8111-111111111111",
@@ -29,5 +29,23 @@ describe("assignment tester pair schema", () => {
 
   it("rejects one account in both tester slots", () => {
     expect(assignmentTesterPairSchema.safeParse({ testerAId: setup.testerAServiceId, testerBId: setup.testerAServiceId }).success).toBe(false);
+  });
+});
+
+describe("asynchronous assignment windows", () => {
+  const batch = {
+    ...setup,
+    studyId: "55555555-5555-4555-8555-555555555555",
+    testerPairs: [{ testerAId: "66666666-6666-4666-8666-666666666666", testerBId: "77777777-7777-4777-8777-777777777777" }],
+    timezone: "Asia/Manila",
+    instructions: "",
+  };
+
+  it("accepts a separate valid Tester B window", () => {
+    expect(createAssignmentBatchSchema.safeParse({ ...batch, testerBStartTime: "16:00", testerBEndTime: "18:00" }).success).toBe(true);
+  });
+
+  it("rejects an inverted Tester B window", () => {
+    expect(createAssignmentBatchSchema.safeParse({ ...batch, testerBStartTime: "18:00", testerBEndTime: "16:00" }).success).toBe(false);
   });
 });

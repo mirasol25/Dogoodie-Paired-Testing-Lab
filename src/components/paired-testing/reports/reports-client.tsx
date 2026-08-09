@@ -153,14 +153,18 @@ export function ReportsClient({
           [
             "Assignment",
             "Status",
-            "Technical exception",
-            "Scheduled start",
-            "Scheduled end",
+            "Synchronization",
+            "Tester A scheduled start",
+            "Tester A scheduled end",
+            "Tester B scheduled start",
+            "Tester B scheduled end",
             "Pickup",
             "Destination",
             "Disposition reason",
           ],
           assignments.map((assignment) => {
+            const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
+            const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
             const event = activity.find(
               (item) =>
                 item.target_id === assignment.id &&
@@ -177,8 +181,11 @@ export function ReportsClient({
             return [
               assignment.assignment_code,
               assignment.status,
-              assignment.scheduled_start,
-              assignment.scheduled_end,
+              testerA?.testingSynchronization ?? "synchronized",
+              testerA?.scheduledStart ?? assignment.scheduled_start,
+              testerA?.scheduledEnd ?? assignment.scheduled_end,
+              testerB?.scheduledStart ?? assignment.scheduled_start,
+              testerB?.scheduledEnd ?? assignment.scheduled_end,
               assignment.pickup_location,
               assignment.destination_location,
               typeof details.reason === "string"

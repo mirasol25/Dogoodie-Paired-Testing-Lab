@@ -36,10 +36,11 @@ export function TesterStart({ assignment, ownSlot, partnerSlot }: { assignment: 
     return () => window.clearTimeout(timer);
   }, [countdown, router]);
 
-  const partnerCleared = partnerSlot?.status === "ready" || partnerSlot?.status === "in_progress";
+  const asynchronousTesting = ownSlot.testingSynchronization === "asynchronous";
+  const partnerCleared = asynchronousTesting || partnerSlot?.status === "ready" || partnerSlot?.status === "in_progress" || partnerSlot?.status === "submitted";
   if (!started && (ownSlot.status !== "ready" || !partnerCleared)) return null;
-  const start = assignment.scheduled_start ? new Date(assignment.scheduled_start) : null;
-  const end = assignment.scheduled_end ? new Date(assignment.scheduled_end) : null;
+  const start = ownSlot.scheduledStart ? new Date(ownSlot.scheduledStart) : assignment.scheduled_start ? new Date(assignment.scheduled_start) : null;
+  const end = ownSlot.scheduledEnd ? new Date(ownSlot.scheduledEnd) : assignment.scheduled_end ? new Date(assignment.scheduled_end) : null;
   const beforeWindow = Boolean(now && start && now < start);
   const afterWindow = Boolean(now && end && now > end);
 
@@ -59,5 +60,5 @@ export function TesterStart({ assignment, ownSlot, partnerSlot }: { assignment: 
 
   if (started) return <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><p className="text-sm font-semibold text-primary">Testing session in progress</p><p className="mt-1 text-xs text-muted-foreground">Request and capture the assigned quote. The submission workflow will open here next.</p></section>;
 
-  return <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div><p className="text-[10px] uppercase text-muted-foreground">Synchronized start</p><h2 className="mt-1.5 text-base font-semibold">Both testers are ready</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Use the approved call or chat cue, then start the local countdown.</p></div><Button onClick={begin} disabled={!now || beforeWindow || afterWindow || pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : null}{pending ? "Starting..." : beforeWindow ? "Testing window has not opened" : afterWindow ? "Testing window has closed" : "Start test"}</Button></section>;
+  return <section className="space-y-4 rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div><p className="text-[10px] uppercase text-muted-foreground">{asynchronousTesting ? "Independent start" : "Synchronized start"}</p><h2 className="mt-1.5 text-base font-semibold">{asynchronousTesting ? "Your testing window is ready" : "Both testers are ready"}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{asynchronousTesting ? "Begin during your assigned tester-side window. You do not need to wait for the partner tester." : "Use the approved call or chat cue, then start the local countdown."}</p></div><Button onClick={begin} disabled={!now || beforeWindow || afterWindow || pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : null}{pending ? "Starting..." : beforeWindow ? "Testing window has not opened" : afterWindow ? "Testing window has closed" : "Start test"}</Button></section>;
 }
