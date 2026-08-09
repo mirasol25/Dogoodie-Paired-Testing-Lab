@@ -64,6 +64,25 @@ export function PrintReportClient({
   const warningChecks = validationResults.filter((result) => result.status === "warning").length;
   const evidenceMetadataAvailable = evidence.filter((file) => file.metadata && typeof file.metadata === "object" && !Array.isArray(file.metadata)).length;
   const includedVariances = accepted.map((pair) => pair.percentage_fare_difference).filter((value): value is number => value !== null);
+  const includedRecordedPairs = accepted.filter(
+    (pair) => pair.submissionA.displayed_fare !== null && pair.submissionB.displayed_fare !== null,
+  );
+  const averageTesterAFare = includedRecordedPairs.length
+    ? includedRecordedPairs.reduce((total, pair) => total + (pair.submissionA.displayed_fare ?? 0), 0) / includedRecordedPairs.length
+    : null;
+  const averageTesterBFare = includedRecordedPairs.length
+    ? includedRecordedPairs.reduce((total, pair) => total + (pair.submissionB.displayed_fare ?? 0), 0) / includedRecordedPairs.length
+    : null;
+  const averageDirectionalDifference = averageTesterAFare === null || averageTesterBFare === null
+    ? null
+    : averageTesterBFare - averageTesterAFare;
+  const testerAHigherCount = includedRecordedPairs.filter(
+    (pair) => (pair.submissionA.displayed_fare ?? 0) > (pair.submissionB.displayed_fare ?? 0),
+  ).length;
+  const testerBHigherCount = includedRecordedPairs.filter(
+    (pair) => (pair.submissionB.displayed_fare ?? 0) > (pair.submissionA.displayed_fare ?? 0),
+  ).length;
+  const equalFareCount = includedRecordedPairs.length - testerAHigherCount - testerBHigherCount;
   const meanVariance = includedVariances.length ? includedVariances.reduce((total, value) => total + value, 0) / includedVariances.length : null;
   const sortedVariances = [...includedVariances].sort((a, b) => a - b);
   const medianVariance = sortedVariances.length ? (sortedVariances.length % 2 ? sortedVariances[Math.floor(sortedVariances.length / 2)] : (sortedVariances[(sortedVariances.length / 2) - 1] + sortedVariances[sortedVariances.length / 2]) / 2) : null;
@@ -151,10 +170,32 @@ export function PrintReportClient({
         </div>
         <p className="mt-4 leading-6">{acceptedNormally} pair{acceptedNormally === 1 ? "" : "s"} were accepted without an exception, {acceptedWithException} pair{acceptedWithException === 1 ? "" : "s"} were accepted with a documented technical exception, {excluded.length} pair{excluded.length === 1 ? "" : "s"} were rejected, and {classification.pending.length} pair{classification.pending.length === 1 ? "" : "s"} remain pending review. {meanVariance === null ? "No included pair has a recorded fare variance." : `Across included pairs with recorded fares, the mean directional variance was ${meanVariance.toFixed(2)}% and the median was ${medianVariance?.toFixed(2)}%. Positive values mean Tester B received the higher fare.`} {asynchronousTesting ? "Because observations used separate tester windows, time-related market effects remain a possible alternative explanation." : ""}</p>
       </Section>
-      <Section title="2. Study design">
+      <Section title="2. Answer to the study question">
+        <p className="border-l-2 border-[#355346] pl-3 text-[11px] font-semibold leading-6">
+          {study.study_question ?? "No study question was recorded."}
+        </p>
+        {includedRecordedPairs.length ? (
+          <>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <PrintMetric label={`Tester A average | ${protocol?.tester_a_value ?? "Condition A"}`} value={formatFare(averageTesterAFare, study.default_currency)} />
+              <PrintMetric label={`Tester B average | ${protocol?.tester_b_value ?? "Condition B"}`} value={formatFare(averageTesterBFare, study.default_currency)} />
+              <PrintMetric label="Average difference (B - A)" value={formatSignedFare(averageDirectionalDifference, study.default_currency)} />
+              <PrintMetric label="Mean signed variance" value={meanVariance === null ? "-" : `${meanVariance.toFixed(2)}%`} />
+              <PrintMetric label="Recorded usable pairs" value={String(includedRecordedPairs.length)} />
+              <PrintMetric label="Higher recorded outcome" value={`A: ${testerAHigherCount} | B: ${testerBHigherCount} | Equal: ${equalFareCount}`} />
+            </div>
+            <p className="mt-3 leading-6">
+              Across {includedRecordedPairs.length} usable pair{includedRecordedPairs.length === 1 ? "" : "s"} with recorded outcomes, Tester A&apos;s condition had the higher value in {testerAHigherCount}, Tester B&apos;s condition had the higher value in {testerBHigherCount}, and {equalFareCount} were equal. The average directional difference was {formatSignedFare(averageDirectionalDifference, study.default_currency)} (Tester B minus Tester A){meanVariance === null ? "." : `, with a mean signed variance of ${meanVariance.toFixed(2)}%.`} These results describe the accepted observations and do not establish causation.
+            </p>
+          </>
+        ) : (
+          <p className="mt-3 leading-6">The accepted observations do not yet contain enough recorded values to answer the study question descriptively.</p>
+        )}
+      </Section>
+      <Section title="3. Study design">
         <p className="leading-6">Two assigned testers collected {asynchronousTesting ? "sequential fare observations in separately enforced tester windows" : "synchronized fare observations in one shared testing window"} for the locked route, side-specific provider or service tier, and protocol conditions. The system compared the submissions using the active protocol, retained required evidence and system metadata, and separated deterministic technical validation from expert review.</p>
       </Section>
-      <Section title="3. Study context">
+      <Section title="4. Study context">
         <dl className="grid grid-cols-2 gap-x-8">
           {[
             ["Study code", study.study_code],
@@ -190,32 +231,32 @@ export function PrintReportClient({
           ))}
         </dl>
       </Section>
-      <Section title="4. Intended tester difference">
+      <Section title="5. Intended tester difference">
         <p className="leading-6">The isolated variable is the only intended difference between the paired testers. All other fixed controls must remain matched under the active protocol.</p>
         <div className="mt-3 grid grid-cols-2 gap-3"><PrintMetric label="Tester A condition" value={protocol?.tester_a_value ?? "Not recorded"} /><PrintMetric label="Tester B condition" value={protocol?.tester_b_value ?? "Not recorded"} /></div>
       </Section>
-      <Section title="5. Protocol controls">
+      <Section title="6. Protocol controls">
         <ul className="space-y-1 leading-5"><li>Side-specific service control: each tester must use the provider and ride tier assigned to that protocol side.</li><li>{asynchronousTesting ? "Request-time synchronization: not applicable by study design; separate tester windows were enforced." : `Request-time threshold: ${formatThreshold(requestTimeThreshold)}.`}</li><li>Location threshold: {formatThreshold(locationThreshold)}. Tester-to-tester distance and each tester&apos;s pickup proximity remain validated.</li><li>Operating-system control: {osLabel}.</li><li>Required evidence: quote screenshot, screen recording, and system-generated metadata.</li></ul>
       </Section>
-      <Section title="6. Descriptive fare results">
+      <Section title="7. Descriptive fare results">
         <div className="grid grid-cols-3 gap-2"><PrintMetric label="Average signed variance" value={meanVariance === null ? "-" : `${meanVariance.toFixed(2)}%`} /><PrintMetric label="Median signed variance" value={medianVariance === null ? "-" : `${medianVariance.toFixed(2)}%`} /><PrintMetric label="Largest absolute variance" value={largestIncludedPair?.percentage_fare_difference === null || !largestIncludedPair ? "-" : `${Math.abs(largestIncludedPair.percentage_fare_difference).toFixed(2)}%`} /><PrintMetric label="Technical validation rate" value={technicalValidationRate === null ? "-" : `${technicalValidationRate.toFixed(1)}%`} /><PrintMetric label="Review acceptance rate" value={reviewAcceptanceRate === null ? "-" : `${reviewAcceptanceRate.toFixed(1)}%`} /><PrintMetric label="Matched pairs / submissions" value={`${pairs.length} / ${pairs.length * 2}`} /></div>
         <p className="mt-3 text-[#587065]">Positive signed variance means Tester B received the higher fare. These are descriptive results only.</p>
       </Section>
-      <Section title="7. Largest included variance">
+      <Section title="8. Largest included variance">
         {largestIncludedPair ? <div className="grid grid-cols-3 gap-2"><PrintMetric label="Pair" value={largestIncludedPair.pair_code} /><PrintMetric label="Tester A quote" value={formatFare(largestIncludedPair.submissionA.displayed_fare, largestIncludedPair.submissionA.currency)} /><PrintMetric label="Tester B quote" value={formatFare(largestIncludedPair.submissionB.displayed_fare, largestIncludedPair.submissionB.currency)} /><PrintMetric label="Variance" value={formatPercent(largestIncludedPair.percentage_fare_difference)} /><PrintMetric label="Request-time gap" value={asynchronousTesting ? "Not applicable by study design" : largestIncludedPair.timestamp_difference_seconds === null ? "-" : `${largestIncludedPair.timestamp_difference_seconds.toFixed(1)} seconds`} /><PrintMetric label="Technical / review" value={`${largestIncludedPair.technical_status} / ${reviewOutcome(latest.get(largestIncludedPair.id))}`} /></div> : <p>No included pair has a recorded fare difference.</p>}
         <p className="mt-3 text-[#587065]">This pair is selected mechanically as the included pair with the largest absolute recorded fare difference. It is not evidence of causation, discrimination, or liability.</p>
       </Section>
-      <Section title="8. Paired submissions and technical conformance">
+      <Section title="9. Paired submissions and technical conformance">
         <div className="grid grid-cols-4 gap-2"><PrintMetric label="Matched pairs" value={String(pairs.length)} /><PrintMetric label="Tester submissions" value={String(pairs.length * 2)} /><PrintMetric label="Required failures" value={String(failedRequiredChecks)} /><PrintMetric label="Warnings" value={String(warningChecks)} /></div>
         <PrintDistributions pairs={pairs} reviews={reviews} />
       </Section>
-      <Section title="9. Expert-review status">
+      <Section title="10. Expert-review status">
         <p className="leading-6">A technically invalid or incomplete pair is only included when an expert reviewer accepts it with a documented technical exception and its required evidence is complete. {accepted.length} usable pair{accepted.length === 1 ? "" : "s"} are included: {acceptedNormally} accepted without exception and {acceptedWithException} accepted with a documented technical exception. {excluded.length} pair{excluded.length === 1 ? "" : "s"} are rejected and {classification.pending.length} remain pending review. Technical findings inform these decisions but do not replace reviewer judgment.</p>
       </Section>
-      <Section title="10. Limitations">
+      <Section title="11. Limitations">
         <p className="leading-6">This memo is descriptive. A pricing difference alone does not establish unlawful discrimination. Findings require interpretation under the approved methodology, repeated observations, statistical analysis, alternative explanations, and applicable law.</p>
       </Section>
-      <Section title="11. Next-review questions">
+      <Section title="12. Next-review questions">
         <ol className="list-decimal space-y-1 pl-4">{nextReviewQuestions.map((question) => <li key={question}>{question}</li>)}</ol>
       </Section>
       <div className="mt-10 border-t-2 border-[#17251f] pt-4 print:break-before-page"><p className="text-[10px] font-bold uppercase text-[#587065]">Supporting appendices</p></div>
@@ -375,6 +416,11 @@ function reviewOutcome(review: ExpertReview | undefined) {
 }
 function formatFare(value: number | null, currency: string | null) {
   return value === null ? "-" : `${currency ?? ""} ${value.toFixed(2)}`.trim();
+}
+function formatSignedFare(value: number | null, currency: string | null) {
+  if (value === null) return "-";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${currency ? `${currency} ` : ""}${Math.abs(value).toFixed(2)}`;
 }
 function formatPercent(value: number | null) {
   return value === null ? "-" : `${value.toFixed(2)}%`;
