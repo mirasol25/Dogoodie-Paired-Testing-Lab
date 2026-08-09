@@ -25,11 +25,7 @@ function normalizeProfile(initial: DeviceProfileInput): DeviceProfileInput {
   const operatingSystemVersion = operatingSystem && rawVersion && !rawVersion.toLowerCase().startsWith(operatingSystem.toLowerCase())
     ? `${operatingSystem} ${rawVersion}`
     : rawVersion;
-  const network = initial.networkType.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
-  const networkType = network === "wifi"
-    ? "Wi-Fi"
-    : network === "4g" || network === "4glte" || network === "lte" ? "4G/LTE" : network === "5g" ? "5G" : initial.networkType;
-  return { ...initial, networkType, operatingSystem, operatingSystemVersion };
+  return { ...initial, operatingSystem, operatingSystemVersion };
 }
 
 export function DeviceProfileForm({ initial, countryName, countryCode }: { initial: DeviceProfileInput; countryName: string | null; countryCode: string | null }) {
@@ -73,20 +69,17 @@ export function DeviceProfileForm({ initial, countryName, countryCode }: { initi
     : [];
 
   return <div className="space-y-6">
-    <Alert><AlertTitle>Future assignment defaults</AlertTitle><AlertDescription>Changes here prefill new submissions. Every submitted observation keeps its own device snapshot for audit and validation.</AlertDescription></Alert>
+    <Alert><AlertTitle>Reusable device details</AlertTitle><AlertDescription>These stable values are applied to future submissions. Session-specific network and app-version details are entered during each assignment.</AlertDescription></Alert>
     <section className="overflow-hidden rounded-md border border-border bg-card/35" aria-labelledby="profile-device-information-heading">
-      <div className="flex gap-3 border-b border-border px-4 py-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary"><Smartphone className="size-4" /></span><div><h2 id="profile-device-information-heading" className="text-sm font-semibold">Device information</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">These defaults help identify device, software, app-version, or network differences that could affect paired fare results. Confirm the current values before every submission.</p></div></div>
+      <div className="flex gap-3 border-b border-border px-4 py-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary"><Smartphone className="size-4" /></span><div><h2 id="profile-device-information-heading" className="text-sm font-semibold">Device information</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Keep the device model and operating-system details used for paired testing up to date.</p></div></div>
       <Accordion type="single" collapsible><AccordionItem value="device-guide" className="border-0 px-4"><AccordionTrigger className="py-3 text-sm"><span className="flex items-center gap-2"><Info className="size-4 text-primary" />Where to find these details</span></AccordionTrigger><AccordionContent className="pb-4 text-xs leading-5">
-        {values.operatingSystem === "Android" ? <div><p className="font-semibold text-foreground">Android</p><p className="mt-1 text-muted-foreground">Find the device model and Android version under Settings &gt; About phone. Find the ride-hailing app version under Settings &gt; Apps &gt; select the app.</p></div> : <div><p className="font-semibold text-foreground">iPhone</p><p className="mt-1 text-muted-foreground">Find Model Name and iOS Version under Settings &gt; General &gt; About. Find the ride-hailing app version in its About screen or under Settings &gt; General &gt; iPhone Storage.</p></div>}
-        <p className="mt-3 text-muted-foreground">Check the status bar or network settings for the connection currently used during testing.</p>
+        {values.operatingSystem === "Android" ? <div><p className="font-semibold text-foreground">Android</p><p className="mt-1 text-muted-foreground">Find the device model and Android version under Settings &gt; About phone.</p></div> : <div><p className="font-semibold text-foreground">iPhone</p><p className="mt-1 text-muted-foreground">Find Model Name and iOS Version under Settings &gt; General &gt; About.</p></div>}
       </AccordionContent></AccordionItem></Accordion>
     </section>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <ChoiceField label="Default network" value={values.networkType} onChange={(value) => update("networkType", value)} options={["Wi-Fi", "4G/LTE", "5G"]} placeholder="Select network" error={errors.networkType} />
       <Field label="Device model" placeholder={values.operatingSystem === "Android" ? "Samsung Galaxy A55" : "iPhone 15"} value={values.deviceType} onChange={(value) => update("deviceType", value)} error={errors.deviceType} />
       <ChoiceField label="Operating system" value={values.operatingSystem} onChange={changeOperatingSystem} options={["iOS", "Android"]} placeholder="Select operating system" error={errors.operatingSystem} />
       <ChoiceField label="OS version" value={values.operatingSystemVersion} onChange={(value) => update("operatingSystemVersion", value)} options={versionOptions} placeholder={values.operatingSystem ? `Select ${values.operatingSystem} version` : "Select an operating system first"} disabled={!values.operatingSystem} error={errors.operatingSystemVersion} />
-      <Field label="Ride-hailing app version" placeholder="For example, 5.355.0" value={values.appVersion} onChange={(value) => update("appVersion", value)} error={errors.appVersion} />
     </div>
     <div className="grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
       <div className="space-y-2"><Label htmlFor="verified-country">Verified country</Label><Input id="verified-country" value={countryName || "Not verified"} readOnly disabled /></div>

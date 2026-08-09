@@ -12,11 +12,9 @@ export async function updateDeviceProfileAction(input: unknown): Promise<{ ok: b
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("update_own_device_profile", {
-    p_network_type: parsed.data.networkType,
     p_device_type: parsed.data.deviceType,
     p_operating_system: parsed.data.operatingSystem,
     p_operating_system_version: parsed.data.operatingSystemVersion,
-    p_app_version: parsed.data.appVersion,
   });
   if (error) return { ok: false, message: error.message || "The device profile could not be updated." };
 
@@ -24,4 +22,3 @@ export async function updateDeviceProfileAction(input: unknown): Promise<{ ok: b
   revalidatePath("/paired-testing-demo/assignments", "layout");
   return { ok: true, message: "Device profile updated for future studies." };
 }
-

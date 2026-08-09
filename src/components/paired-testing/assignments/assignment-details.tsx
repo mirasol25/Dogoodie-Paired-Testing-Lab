@@ -35,7 +35,7 @@ function formatSchedule(value: string | null, timezone: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
 }
 
-export function AssignmentDetails({ study, assignment, submission, technicalProfile, evidence, currentUserId, canManage, operations }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "network_type" | "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null }) {
+export function AssignmentDetails({ study, assignment, submission, technicalProfile, evidence, currentUserId, canManage, operations }: { study: Study; assignment: AssignmentSummary; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version"> | null; evidence: EvidenceRow[]; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null }) {
   const timezone = timezoneOf(assignment, study.display_timezone || "UTC");
   const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");

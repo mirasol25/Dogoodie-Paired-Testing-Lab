@@ -1266,9 +1266,7 @@ export type Database = {
     Functions: {
       update_own_device_profile: {
         Args: {
-          p_app_version: string
           p_device_type: string
-          p_network_type: string
           p_operating_system: string
           p_operating_system_version: string
         }
