@@ -8,6 +8,44 @@ import type { ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotVali
 
 export class ScreenshotOCRError extends Error {}
 
+export type ScreenshotOCRJobStatus = "queued" | "processing" | "completed" | "failed";
+
+export async function claimScreenshotOCRJob(evidenceFileId: string, lockToken: string) {
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any).rpc("claim_screenshot_ocr_job", { p_evidence_file_id: evidenceFileId, p_lock_token: lockToken });
+  if (error || !data) throw new ScreenshotOCRError(error?.message || "The screenshot OCR job could not be claimed.");
+  return data as { id: string; status: ScreenshotOCRJobStatus; attempt_count: number; last_error: string | null; lock_token: string | null };
+}
+
+export async function getScreenshotOCRJob(evidenceFileId: string) {
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any).from("screenshot_ocr_jobs").select("status,attempt_count,last_error").eq("evidence_file_id", evidenceFileId).maybeSingle();
+  if (error) throw new ScreenshotOCRError("The screenshot OCR status could not be loaded.");
+  return data as { status: ScreenshotOCRJobStatus; attempt_count: number; last_error: string | null } | null;
+}
+
+export async function getScreenshotValidationByEvidence(evidenceFileId: string): Promise<ScreenshotValidationResult | null> {
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any).from("screenshot_ocr_validations").select("*").eq("evidence_file_id", evidenceFileId).eq("is_active", true).maybeSingle();
+  if (error) throw new ScreenshotOCRError("The screenshot validation could not be loaded.");
+  return data ? restoreScreenshotValidation(data) : null;
+}
+
+export async function finishScreenshotOCRJob(evidenceFileId: string, lockToken: string, errorMessage?: string) {
+  const admin = createAdminClient() as any;
+  const failed = Boolean(errorMessage);
+  const { data: job } = await admin.from("screenshot_ocr_jobs").select("attempt_count").eq("evidence_file_id", evidenceFileId).maybeSingle();
+  const terminal = failed && (job?.attempt_count ?? 3) >= 3;
+  await admin.from("screenshot_ocr_jobs").update(failed ? {
+    status: terminal ? "failed" : "queued",
+    next_attempt_at: new Date(Date.now() + Math.min(30_000, 2 ** (job?.attempt_count ?? 1) * 2_000)).toISOString(),
+    locked_at: null, lock_token: null, last_error: errorMessage, updated_at: new Date().toISOString(),
+  } : {
+    status: "completed", locked_at: null, lock_token: null, last_error: null,
+    completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }).eq("evidence_file_id", evidenceFileId).eq("lock_token", lockToken);
+}
+
 export async function ensureScreenshotDraft(assignmentId: string) {
   const supabase = await createClient();
   const db = supabase as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: { id: string } | null; error: { message: string } | null }> };
@@ -128,6 +166,10 @@ export async function getSubmissionScreenshotValidation(submissionId: string) {
 export async function getRestoredSubmissionScreenshotValidation(submissionId: string): Promise<ScreenshotValidationResult | null> {
   const data = await getSubmissionScreenshotValidation(submissionId);
   if (!data) return null;
+  return restoreScreenshotValidation(data);
+}
+
+function restoreScreenshotValidation(data: any): ScreenshotValidationResult {
   const fareMin = data.detected_fare_min === null ? null : Number(data.detected_fare_min);
   const fareMax = data.detected_fare_max === null ? null : Number(data.detected_fare_max);
   return {

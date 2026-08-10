@@ -4,7 +4,7 @@ import { parseSelectedFare } from "./fare-parser";
 import { getPlatformAdapter } from "./platforms";
 import type { ScreenshotOCRResult } from "./schemas";
 import { parseStatusBarTime } from "./time-parser";
-import { recognizeLayout, recognizeText } from "./tesseract";
+import { recognizeLayout, recognizeText, withOCRWorker } from "./tesseract";
 import type { ScreenshotCandidate } from "./schemas";
 
 function labelFromText(text: string) {
@@ -50,16 +50,23 @@ export async function extractSelectedRide(image: Buffer, platformSlug: string): 
   const batteryImage = await sharp(image)
     .extract({ left: Math.round(width * 0.86), top: Math.round(height * 0.018), width: Math.max(1, Math.round(width * 0.06)), height: Math.max(1, Math.round(height * 0.024)) })
     .resize({ width: Math.max(1, Math.round(width * 1.2)) }).grayscale().normalize().threshold(135).png().toBuffer();
-  const [selectedCardRawText, statusBarRawText, batteryRawText, layout] = await Promise.all([
-    recognizeText(selectedCardImage),
-    recognizeText(timeImage, { tessedit_pageseg_mode: 7 }),
-    recognizeText(batteryImage, { tessedit_pageseg_mode: 8, tessedit_char_whitelist: "0123456789" }),
-    recognizeLayout(image),
-  ]);
+  // One worker loads the language model once. Four concurrent workers caused
+  // large memory/CPU spikes in serverless production when testers uploaded at
+  // the same time.
+  const layoutImage = width > 1080
+    ? await sharp(image).resize({ width: 1080, withoutEnlargement: true }).png().toBuffer()
+    : image;
+  const [selectedCardRawText, statusBarRawText, batteryRawText, layout] = await withOCRWorker(async (worker) => [
+    await recognizeText(worker, selectedCardImage),
+    await recognizeText(worker, timeImage, { tessedit_pageseg_mode: 7 }),
+    await recognizeText(worker, batteryImage, { tessedit_pageseg_mode: 8, tessedit_char_whitelist: "0123456789" }),
+    await recognizeLayout(worker, layoutImage),
+  ] as const);
+  const layoutScale = width / Math.min(width, 1080);
   const warnings: string[] = [];
   const selectedRideLabel = labelFromText(selectedCardRawText);
   if (!selectedRideLabel) warnings.push("Selected ride label could not be read.");
-  const normalize = (bbox: { x0: number; y0: number; x1: number; y1: number }) => ({ x: bbox.x0 / width, y: bbox.y0 / height, width: (bbox.x1 - bbox.x0) / width, height: (bbox.y1 - bbox.y0) / height });
+  const normalize = (bbox: { x0: number; y0: number; x1: number; y1: number }) => ({ x: (bbox.x0 * layoutScale) / width, y: (bbox.y0 * layoutScale) / height, width: ((bbox.x1 - bbox.x0) * layoutScale) / width, height: ((bbox.y1 - bbox.y0) * layoutScale) / height });
   const candidates: ScreenshotCandidate[] = [];
   layout.lines.forEach((line, index) => {
     const bounds = normalize(line.bbox);

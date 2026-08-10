@@ -29,12 +29,12 @@ Use this section during a pilot. Use the later sections for preparation, trainin
 
 ### Run one paired assignment
 
-1. Each tester opens the assigned record and verifies the locked route, service/tier, condition, instructions, and window.
+1. Each tester opens **Assigned Studies**, selects the study, opens the featured **Next assignment**, and verifies the locked route, service/tier, condition, instructions, and window.
 2. Each tester completes the readiness checklist and selects **Confirm ready**.
 3. During the allowed window, each tester selects **Start test**. Synchronized assignments require both testers to be ready.
 4. Each tester follows the locked route and service/tier, captures the quote without booking, and preserves the required evidence.
 5. Each tester uploads the screenshot first, confirms the selected OCR fare/service result, then uploads any required recording.
-6. Each tester completes the observation, saves the latest changes, reviews the record, and selects **Submit observation**.
+6. Each tester completes the observation, saves the latest changes, reviews the record, and selects **Submit observation**. The application then shows a read-only submission receipt.
 7. After both sides submit, the system creates one matched pair and runs technical validation.
 8. A reviewer examines both observations, validation results, and evidence before recording a decision.
 
@@ -90,12 +90,24 @@ Use one named account per person and grant the minimum required role. Global rol
 |---|---|---|
 | Administrator | Invite accounts, manage global roles, oversee access and deployment ownership. | Share credentials or grant broad access for convenience. |
 | Coordinator | Configure studies and protocols, manage membership, schedule assignments, monitor collection, and prepare outputs. | Alter an active protocol to repair collected data. |
-| Tester | Verify the assignment, execute the assigned condition, capture evidence, and submit an accurate observation. | Coordinate prices, edit evidence, book a ride, or use another person's account. |
+| Tester | Use Assigned Studies to find current work, verify the assignment, coordinate timing with the named partner, execute the assigned condition, capture evidence, and submit an accurate observation. | Coordinate or disclose observed prices, edit evidence, book a ride, or use another person's account. |
 | Expert reviewer | Inspect observations, rule results, and evidence; accept, accept with exception, reject, or clear a decision. | Treat technical validation as a legal or causal conclusion. |
 | Law-firm viewer | Read released completed/archived assigned outputs. | Open raw evidence or export data unless separately authorized. |
 | Deployment maintainer | Manage Vercel/Supabase configuration, migrations, backups, monitoring, and incident response. | Put secrets in source control, documents, screenshots, or chat. |
 
 For demonstrations and QA, use separate browser profiles for separate users so sessions and permissions are not mixed.
+
+### Navigation and data scope
+
+The current interface separates portfolio-level pages from one-study workspaces:
+
+- **Dashboard** opens the portfolio dashboard for authorized non-tester roles. Use the scope selector in the page header to switch between **All studies** and one accessible study.
+- **Study Management**, **Assigned Studies**, **Review Studies**, and **Released Studies** are role-specific study libraries. Selecting a study opens its dedicated workspace.
+- A study workspace has role-filtered tabs: **Overview**, **Protocol**, **Assignments**, **Matched Pairs**, **Evidence**, and **Activity Log**. Testers see only Overview and Assignments; other tabs appear only when the role permits them.
+- **Reports** opens a report library across accessible studies. Reports can be filtered as interim or final and opened without changing a hidden global study selection.
+- **Activity Log** at the main-navigation level is a portfolio activity view. The Activity Log inside a study workspace is scoped to that study.
+
+The application now uses clean public paths such as `/dashboard`, `/studies`, `/tester-studies`, and `/reports`. Older `/paired-testing-demo/...` links redirect to the corresponding clean path.
 
 ---
 
@@ -208,15 +220,17 @@ For asynchronous work, Tester B must begin at or after Tester A's window ends. T
 
 Before test day:
 
+- Open **Assigned Studies**, select the study, and use its Overview to see assigned, actionable, and submitted sessions. The featured card identifies the next assignment and links to the full assignment list.
 - Update **Device profile** with accurate stable device information.
 - Confirm the assigned condition and service/tier.
 - Verify location permission, connectivity, battery, storage, and screen recording.
 - Disable notification previews and remove unrelated personal content from view.
-- Do not disclose quotes between testers.
+- Use the partner name and email shown on the assignment only for operational coordination. The paired roster may also show the partner's assigned protocol condition.
+- Coordinating readiness and the start cue is allowed; disclosing or comparing observed quotes before both submissions are locked is not allowed.
 
 ### Tester: capture and submit
 
-1. Open the assignment and read the locked route, condition, service/tier, window, and notes.
+1. Open **Assigned Studies**, select the study, then open the featured assignment or the **Assignments** tab. Read the locked route, condition, service/tier, window, and coordinator instructions.
 2. Complete all readiness items and select **Confirm ready**.
 3. Select **Start test** only within the allowed tester-side window.
 4. Follow the countdown or independent-start instruction.
@@ -227,6 +241,7 @@ Before test day:
 9. Upload the required recording.
 10. Complete the current observation fields, including app version and network information when requested.
 11. Save the latest changes, review the record, and select **Submit observation**.
+12. Confirm the read-only submission receipt shows the assignment, condition, fare, evidence count, route, and submission time. Return to the study assignment list; no further editing is available unless the record is formally reopened.
 
 Submission locks the observation. Do not repeatedly resubmit after an error; record the exact error and escalate.
 
@@ -236,8 +251,8 @@ Submission locks the observation. Do not repeatedly resubmit after an error; rec
 
 ### Reviewer decision path
 
-1. Open **Review studies -> Matched Pairs**.
-2. Filter to pending work and open a pair.
+1. Open **Review Studies**, select the study, then select the study workspace's **Matched Pairs** tab.
+2. Filter to pending work and open a pair. The study workspace remains the navigation context while the pair detail is open.
 3. Compare both fares, timestamps, locations, assigned conditions, and service/tier.
 4. Review every technical rule and both evidence records/files.
 5. Select one outcome:
@@ -257,11 +272,15 @@ Submission locks the observation. Do not repeatedly resubmit after an error; rec
 
 Before distribution:
 
-1. Reconcile accepted usable counts across Dashboard, pair table, and report.
-2. Open CSV/JSON exports and confirm expected columns and row counts.
-3. Preview the report and use browser **Print / Save PDF**.
-4. Check Letter page breaks, clipped tables, charts, date/timezone labels, and included/pending/excluded counts.
-5. Store exports only in the approved secure location.
+1. Open **Dashboard** and use the scope selector to choose the study. Do not reconcile a single-study report against the **All studies** portfolio totals.
+2. Reconcile accepted usable counts across the study-scoped Dashboard, the study workspace's **Matched Pairs** tab, and the report.
+3. Open **Reports**, search for the study name/code, confirm whether it is marked **Interim** or **Final**, and select **Open report**.
+4. Open CSV/JSON exports and confirm expected columns and row counts.
+5. Preview the report and use browser **Print / Save PDF**.
+6. Check Letter page breaks, clipped tables, charts, date/timezone labels, and included/pending/excluded counts.
+7. Store exports only in the approved secure location.
+
+Use the main **Activity Log** to inspect events across accessible studies. Use **Study Management/Review Studies -> select study -> Activity Log** when investigating a single study. Filters are category-scoped so actor, object, action, and date choices remain relevant to the selected activity scope.
 
 ---
 
@@ -298,6 +317,8 @@ Operational requirements:
 
 - Use individual accounts and minimum permissions; never share logins.
 - Use approved pilot identities and provider accounts.
+- Assigned testers can see the paired partner's display name, email address, and assigned protocol condition for coordination. Use this information only for the assigned session and do not forward it. Testers do not receive the partner's submission data through the roster.
+- Law-firm viewers do not receive partner email addresses through the assignment roster.
 - Treat evidence and exports as sensitive even when storage is private.
 - Report lost devices, wrong-recipient access, account sharing, or exposed credentials immediately.
 - Agree retention and deletion rules before collecting real data.
@@ -335,13 +356,13 @@ Use a clearly labeled training study and approved demonstration evidence. Do not
 
 | Time | Area | Show | Key message |
 |---:|---|---|---|
-| 2 min | Overview | Purpose, active study, workflow | The system structures collection; it does not make legal conclusions. |
-| 3 min | Study and Protocol | Route, services, A/B conditions, controls, tolerances, evidence, locked version | Assignments inherit an approved version. |
-| 3 min | Membership and Assignment | Role-scoped access and one future assignment | Global role and study membership both matter; pairing is manual. |
-| 5 min | Tester journey | Device Profile, readiness, start, screenshot/OCR, recording, observation, submit | Evidence-first workflow and locked submission. |
+| 2 min | Portfolio Dashboard | All-studies totals, study scope selector, and descriptive boundary | Select the correct scope before interpreting or reconciling metrics. |
+| 3 min | Study workspace and Protocol | Select a study; show Overview tabs, route, services, A/B conditions, controls, tolerances, evidence, and locked version | Each study has a stable workspace; assignments inherit an approved version. |
+| 3 min | Membership and Assignment | Role-scoped tabs, partner roster, and one future assignment | Global role and study membership both matter; pairing is manual. |
+| 5 min | Tester journey | Assigned Studies overview, next assignment, Device Profile, partner contact, readiness, start, screenshot/OCR, recording, observation, submit, and receipt | Evidence-first workflow, permitted timing coordination, and locked submission. |
 | 3 min | Pair and validation | Directional difference and rule-level results | Technical status is deterministic and separate from review. |
 | 2 min | Expert review | Accept, exception, reject, clear | Exceptions require explicit human justification. |
-| 2 min | Dashboard, report, audit | Reconcile counts, preview PDF, exports, activity | Outputs remain descriptive and require QA. |
+| 2 min | Reports and activity | Report library, interim/final stage, study report, global/study activity, exports, and PDF preview | Outputs remain descriptive, scoped, and subject to QA. |
 
 ### Demo recovery plan
 
@@ -412,6 +433,21 @@ Complete this table for every pilot release:
 | Retention owner/policy reference | |
 | Known limitations accepted by | |
 
+### Post-update smoke checks
+
+Run these checks after deploying the current navigation/study-workspace update:
+
+- [ ] Old bookmarked `/paired-testing-demo/...` URLs redirect to their clean equivalents without losing the intended destination.
+- [ ] Administrator/coordinator navigation shows Dashboard, Study Management, Activity Log, and Reports.
+- [ ] Tester navigation shows Assigned Studies and the selected study overview identifies the next actionable assignment.
+- [ ] Reviewer navigation shows Review Studies; selecting one exposes the permitted Protocol, Matched Pairs, Evidence, and Activity Log tabs.
+- [ ] Viewer navigation shows only released studies and permitted read-only workspace tabs.
+- [ ] The Dashboard scope selector changes between portfolio and one-study computations without mixing totals.
+- [ ] The Reports library filters interim/final reports and opens the correct study report.
+- [ ] A tester sees only their paired roster's name, email, and protocol condition—not partner submission data.
+- [ ] A submitted tester sees a read-only receipt and can return to the study assignment history.
+- [ ] Global and study-scoped Activity Logs show the intended category-filtered events.
+
 ---
 
 ## 13. Current Limitations
@@ -422,6 +458,7 @@ Complete this table for every pilot release:
 - Geocoding is not a jurisdictional authority.
 - Thresholds, controls, exclusions, sample size, and interpretation require independent approval.
 - Reminders, exception escalation, and replacement scheduling remain partly manual.
+- Partner coordination occurs outside the application using the displayed contact information; the application does not provide chat, start-cue synchronization, or automated reminders.
 - Activity history is not tamper-proof forensic chain-of-custody infrastructure.
 - Browser-generated PDF output requires visual QA.
 - Backups, monitoring, retention, incident response, and production operations remain environment-owner responsibilities.

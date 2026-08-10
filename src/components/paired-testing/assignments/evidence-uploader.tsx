@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CircleAlert, FileImage, FileJson, Film, LoaderCircle, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { ensureScreenshotDraftAction, processScreenshotEvidenceAction, registerEvidenceAction, submitObservationAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
+import { ensureScreenshotDraftAction, registerEvidenceAction, submitObservationAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import { ScreenshotCandidateModal } from "@/components/paired-testing/assignments/screenshot-candidate-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,10 +62,35 @@ export function EvidenceUploader({ assignment, ownSlot, submissionId, observatio
   const [uploading, setUploading] = useState<UploadType | null>(null);
   const [draftId, setDraftId] = useState<string | null>(submissionId);
   const [validation, setValidation] = useState<ScreenshotValidationResult | null>(initialValidation);
+  const [ocrEvidenceId, setOcrEvidenceId] = useState<string | null>(() => initialEvidence.filter((item) => item.evidence_type === "screenshot").at(-1)?.id ?? null);
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "queued" | "processing" | "completed" | "failed">(initialValidation ? "completed" : initialEvidence.some((item) => item.evidence_type === "screenshot") ? "queued" : "idle");
+  const [ocrError, setOcrError] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState(initialScreenshotUrl);
   const screenshotUrlRef = useRef("");
   useEffect(() => () => { if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current); }, []);
+  useEffect(() => {
+    if (!ocrEvidenceId || !["queued", "processing"].includes(ocrStatus)) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const response = await fetch(`/api/screenshot-ocr/${ocrEvidenceId}`, { cache: "no-store" });
+        if (!response.ok || cancelled) return;
+        const job = await response.json() as { status: "queued" | "processing" | "completed" | "failed"; last_error?: string | null; validation?: ScreenshotValidationResult | null };
+        setOcrStatus(job.status);
+        setOcrError(job.last_error ?? "");
+        if (job.status === "completed" && job.validation) {
+          setValidation(job.validation);
+          setReviewOpen(job.validation.selectionStatus === "pending");
+          toast.success("OCR candidates are ready. Select the correct boxes.");
+        }
+        else if (job.status === "queued") void fetch(`/api/screenshot-ocr/${ocrEvidenceId}`, { method: "POST" });
+      } catch { /* The persisted job remains available for the next poll. */ }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 4000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [ocrEvidenceId, ocrStatus, router]);
   function chooseFile(type: UploadType, file?: File) {
     setFiles((current) => ({ ...current, [type]: file }));
     if (type === "screenshot") {
@@ -101,9 +126,11 @@ export function EvidenceUploader({ assignment, ownSlot, submissionId, observatio
       if (!result.ok) { await supabase.storage.from("paired-testing-evidence").remove([path]); throw new Error(result.message); }
       setUploadedTypes((current) => [...new Set([...current, requirement.code])]);
       if (requirement.code === "screenshot" && result.evidenceId) {
-        const ocr = await processScreenshotEvidenceAction(result.evidenceId);
-        if (!ocr.ok || !ocr.validation) toast.error(ocr.message);
-        else { setValidation(ocr.validation); setReviewOpen(true); toast.success("OCR candidates are ready. Select the correct boxes."); }
+        setValidation(null);
+        setOcrEvidenceId(result.evidenceId);
+        setOcrStatus("queued");
+        setOcrError("");
+        toast.success("Screenshot uploaded. OCR has been queued.");
       } else toast.success(result.message);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Evidence upload failed."); }
     finally { setUploading(null); }
@@ -119,6 +146,8 @@ export function EvidenceUploader({ assignment, ownSlot, submissionId, observatio
     {validation && screenshotUrl ? <ScreenshotCandidateModal key={validation.validationId} open={reviewOpen} onOpenChange={setReviewOpen} imageUrl={screenshotUrl} validation={validation} expectedService={ownSlot.serviceName ?? "Assigned service"} onConfirmed={(confirmed) => { setValidation(confirmed); onOCRResult?.(confirmed); toast.success(confirmed.serviceValidation === "matched" ? "Screenshot confirmed and ride tier verified." : "Selected ride tier does not match."); }} /> : null}
     <div><p className="text-[10px] uppercase text-muted-foreground">Step 1 of 5 · Upload evidence</p><h2 className="mt-1.5 text-base font-semibold">Upload your screenshot and screen recording</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Upload the full-screen quote screenshot first. The selection review opens automatically after processing. Then upload the screen recording saved during the test.</p></div>
     <ScreenshotCaptureGuide platformName={ownSlot.platformName} serviceName={ownSlot.serviceName} />
+    {ocrStatus === "queued" || ocrStatus === "processing" ? <div className="rounded-md border border-amber-400/40 bg-amber-400/[0.06] p-3 text-xs"><p className="flex items-center gap-2 font-medium"><LoaderCircle className="size-4 animate-spin" />{ocrStatus === "queued" ? "Screenshot uploaded — waiting for OCR" : "Processing screenshot OCR"}</p><p className="mt-1 text-muted-foreground">You may continue with the screen recording while processing finishes. Queued jobs are retried automatically.</p></div> : null}
+    {ocrStatus === "failed" ? <div className="rounded-md border border-red-400/40 bg-red-400/[0.06] p-3 text-xs"><p className="font-medium">Screenshot OCR could not be completed after three attempts</p><p className="mt-1 text-muted-foreground">{ocrError || "Replace the screenshot to create a new OCR job."}</p></div> : null}
     {validation ? <div className={`rounded-md border p-3 text-xs ${validation.selectionStatus === "pending" ? "border-amber-400/40 bg-amber-400/[0.06]" : validation.serviceValidation === "matched" ? "border-primary/35 bg-primary/[0.05]" : "border-red-400/40 bg-red-400/[0.06]"}`}><p className="font-medium">{validation.selectionStatus === "pending" ? "Screenshot details need confirmation" : validation.serviceValidation === "matched" ? "Required service verified" : "Selected service mismatch"}</p><p className="mt-1 text-muted-foreground">Required: {ownSlot.serviceName ?? "Assigned service"} · Detected: {validation.selectionStatus === "pending" ? "Awaiting box selections" : validation.selectedRideLabel ?? "Unreadable"}</p>{validation.selectionStatus === "pending" && screenshotUrl ? <Button size="sm" variant="outline" className="mt-2" onClick={() => setReviewOpen(true)}>Review detected boxes</Button> : null}</div> : null}
     <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
       {requirements.map((requirement) => { const Icon = icons[requirement.code]; const uploaded = uploadedTypes.includes(requirement.code); const storedFile = initialEvidence.filter((item) => item.evidence_type === requirement.code).at(-1); return <div key={requirement.code} className="grid gap-3 p-4 sm:grid-cols-[1fr_minmax(220px,1fr)_auto] sm:items-center"><div className="flex items-center gap-3"><Icon className="size-4 text-primary" /><div><p className="text-sm font-medium">{requirement.label}</p><div className="mt-1 flex gap-1.5"><Badge variant={requirement.required ? "outline" : "secondary"}>{requirement.required ? "Required" : "Configured"}</Badge>{uploaded ? <Badge variant="secondary">Uploaded</Badge> : null}</div></div></div><div className="space-y-1.5">{storedFile && !files[requirement.code] ? <p className="truncate text-xs text-muted-foreground">Stored file: <span className="text-foreground">{storedFile.original_filename}</span></p> : null}<Input type="file" accept={accepts[requirement.code]} disabled={(requirement.code !== "screenshot" && !activeSubmissionId) || uploading !== null} onChange={(event) => chooseFile(requirement.code, event.target.files?.[0])} /></div><Button size="sm" variant={uploaded ? "outline" : "default"} disabled={!files[requirement.code] || uploading !== null || (requirement.code !== "screenshot" && !activeSubmissionId)} onClick={() => void upload(requirement)}>{uploading === requirement.code ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}{uploading === requirement.code ? "Uploading..." : uploaded ? "Replace" : "Upload"}</Button></div>; })}

@@ -8,6 +8,10 @@ import { getAccessibleStudyById } from "@/lib/data/studies";
 import { getRestoredSubmissionScreenshotValidation } from "@/lib/data/screenshot-ocr";
 import { createClient } from "@/lib/supabase/server";
 
+// OCR is bounded by the deployment platform. The extraction path uses one
+// worker, while this allows enough time for cold starts on production.
+export const maxDuration = 60;
+
 export default async function AssignmentDetailsPage({ params }: { params: Promise<{ assignmentId: string }> }) {
   const { assignmentId } = await params;
   const identity = await requireActiveUser(`/paired-testing-demo/assignments/${assignmentId}`);
