@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Detect clients that are still running assets from a previous Vercel build.
+  deploymentId: process.env.VERCEL_GIT_COMMIT_SHA,
   // Tesseract spawns a Node worker using its package-relative __dirname.
   // Keep it external so Turbopack does not rewrite that path to C:\\ROOT.
   serverExternalPackages: ["tesseract.js", "tesseract.js-core", "@google-cloud/vision"],

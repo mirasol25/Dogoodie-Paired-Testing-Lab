@@ -1,23 +1,22 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { Check, LoaderCircle } from "lucide-react";
+import { useMemo, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
+import { Check, Crosshair, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { confirmScreenshotCandidatesAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
-import { Badge } from "@/components/ui/badge";
+import { confirmScreenshotCandidatesAction, detectScreenshotTimeRegionAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotCandidateType, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
+import type { NormalizedBounds, ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotCandidateType, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
 
-type RequiredScreenshotCandidateType = Exclude<ScreenshotCandidateType, "battery">;
+type RequiredType = Exclude<ScreenshotCandidateType, "battery">;
 
-const steps: Array<{ type: RequiredScreenshotCandidateType; title: string; instruction: string }> = [
-  { type: "ride_card", title: "Selected ride", instruction: "Choose the complete ride card that is visibly selected in the app. Do not choose another ride tier shown above or below it." },
-  { type: "fare", title: "Displayed fare", instruction: "Choose the fare inside the ride card selected in Step 1. Do not choose another ride's fare, a promotion, wallet balance, or fee." },
-  { type: "time", title: "Screenshot time", instruction: "Choose the phone time in the top status bar. Do not choose an arrival estimate such as “7 minutes away.”" },
+const fields: Array<{ type: RequiredType; title: string; color: string; fill: string }> = [
+  { type: "ride_card", title: "Selected ride", color: "text-lime-300", fill: "text-lime-400/20" },
+  { type: "fare", title: "Displayed fare", color: "text-cyan-300", fill: "text-cyan-400/20" },
+  { type: "time", title: "Screenshot time", color: "text-amber-300", fill: "text-amber-400/20" },
 ];
 
-function selectionKey(type: RequiredScreenshotCandidateType): keyof ScreenshotCandidateSelections {
+function selectionKey(type: RequiredType): keyof ScreenshotCandidateSelections {
   return type === "ride_card" ? "rideCardCandidateId" : type === "fare" ? "fareCandidateId" : "timeCandidateId";
 }
 
@@ -27,39 +26,109 @@ function fareIsInsideRide(fare: ScreenshotCandidate, ride: ScreenshotCandidate) 
     && center.y >= ride.bounds.y - 0.03 && center.y <= ride.bounds.y + ride.bounds.height + 0.03;
 }
 
+function suggestedSelections(validation: ScreenshotValidationResult): Partial<ScreenshotCandidateSelections> {
+  const saved = validation.selectedCandidates ?? {};
+  const ride = validation.candidates.find((candidate) => candidate.id === saved.rideCardCandidateId)
+    ?? validation.candidates.find((candidate) => candidate.type === "ride_card" && candidate.platformServiceId === validation.expectedPlatformServiceId);
+  const fare = validation.candidates.find((candidate) => candidate.id === saved.fareCandidateId)
+    ?? validation.candidates.find((candidate) => candidate.type === "fare" && ride && fareIsInsideRide(candidate, ride));
+  const time = validation.candidates.find((candidate) => candidate.id === saved.timeCandidateId)
+    ?? validation.candidates.find((candidate) => candidate.type === "time" && candidate.validationStatus !== "invalid");
+  return {
+    rideCardCandidateId: ride?.id,
+    fareCandidateId: fare?.id,
+    timeCandidateId: time?.id,
+  };
+}
+
 export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validation, expectedService, onConfirmed }: { open: boolean; onOpenChange: (open: boolean) => void; imageUrl: string; validation: ScreenshotValidationResult; expectedService: string; onConfirmed: (result: ScreenshotValidationResult) => void }) {
-  const [step, setStep] = useState(0);
-  const [selections, setSelections] = useState<Partial<ScreenshotCandidateSelections>>(validation.selectedCandidates ?? {});
+  const suggested = useMemo(() => suggestedSelections(validation), [validation]);
+  const [candidates, setCandidates] = useState(validation.candidates);
+  const [selections, setSelections] = useState<Partial<ScreenshotCandidateSelections>>(suggested);
+  const [editing, setEditing] = useState<RequiredType | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [drawBounds, setDrawBounds] = useState<NormalizedBounds | null>(null);
   const [pending, startTransition] = useTransition();
-  // The review screen uses step === steps.length, so always keep a valid
-  // active selection step for the preview and memoized candidate list.
-  const current = steps[Math.min(step, steps.length - 1)];
-  const candidates = useMemo(() => validation.candidates.filter((candidate) => candidate.type === current.type), [current.type, validation.candidates]);
-  const selectedId = selections[selectionKey(current.type)];
-  const selectedCandidate = candidates.find((candidate) => candidate.id === selectedId);
-  const selectedRide = validation.candidates.find((candidate) => candidate.id === selections.rideCardCandidateId && candidate.type === "ride_card");
-  function candidateIsInvalid(candidate: ScreenshotCandidate) {
-    if (current.type === "ride_card") return Boolean(candidate.platformServiceId && candidate.platformServiceId !== validation.expectedPlatformServiceId);
-    if (current.type === "fare") return Boolean(selectedRide && !fareIsInsideRide(candidate, selectedRide));
-    return candidate.validationStatus === "invalid";
+  const [detecting, startDetection] = useTransition();
+
+  const selected = useMemo(() => fields.map((field) => ({
+    ...field,
+    candidate: candidates.find((candidate) => candidate.id === selections[selectionKey(field.type)] && candidate.type === field.type),
+  })), [candidates, selections]);
+  const selectedRide = selected.find((field) => field.type === "ride_card")?.candidate;
+  const choices = editing ? candidates.filter((candidate) => candidate.type === editing) : [];
+
+  function isInvalid(candidate: ScreenshotCandidate) {
+    if (candidate.type === "ride_card") return candidate.platformServiceId !== validation.expectedPlatformServiceId;
+    if (candidate.type === "fare") return !selectedRide || !fareIsInsideRide(candidate, selectedRide);
+    return candidate.type === "time" && candidate.validationStatus === "invalid";
   }
-  const selectedInvalid = selectedCandidate ? candidateIsInvalid(selectedCandidate) : false;
-  const selectedInvalidMessage = current.type === "ride_card"
-    ? `Detected ${selectedCandidate?.displayValue ?? "ride"}, but this assignment requires ${expectedService}.`
-    : current.type === "fare"
-      ? "This fare is not inside the selected ride card and may belong to another ride or screen element."
-      : selectedCandidate?.validationMessage || "This screenshot time is outside the current test attempt.";
 
   function changeOpen(nextOpen: boolean) {
     if (!nextOpen) {
-      setStep(0);
-      setSelections(validation.selectedCandidates ?? {});
+      setSelections(suggested);
+      setCandidates(validation.candidates);
+      setEditing(null);
+      setDrawing(false);
+      setDrawBounds(null);
     }
     onOpenChange(nextOpen);
   }
 
   function choose(candidate: ScreenshotCandidate) {
-    setSelections((value) => ({ ...value, [selectionKey(current.type)]: candidate.id }));
+    if (!editing || candidate.type !== editing || isInvalid(candidate)) return;
+    setSelections((current) => {
+      const next = { ...current, [selectionKey(editing)]: candidate.id };
+      if (editing === "ride_card") {
+        const currentFare = candidates.find((item) => item.id === current.fareCandidateId && item.type === "fare");
+        if (!currentFare || !fareIsInsideRide(currentFare, candidate)) {
+          next.fareCandidateId = candidates.find((item) => item.type === "fare" && fareIsInsideRide(item, candidate))?.id;
+        }
+      }
+      return next;
+    });
+    setEditing(null);
+  }
+
+  function point(event: ReactPointerEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) };
+  }
+
+  function beginDraw(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!drawing || detecting) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const start = point(event);
+    setDrawStart(start);
+    setDrawBounds({ ...start, width: 0, height: 0 });
+  }
+
+  function continueDraw(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!drawing || !drawStart) return;
+    const current = point(event);
+    setDrawBounds({ x: Math.min(drawStart.x, current.x), y: Math.min(drawStart.y, current.y), width: Math.abs(current.x - drawStart.x), height: Math.abs(current.y - drawStart.y) });
+  }
+
+  function finishDraw(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!drawing || !drawStart || !drawBounds) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setDrawStart(null);
+    if (drawBounds.width < 0.02 || drawBounds.height < 0.01) return toast.error("Draw a box around the complete status-bar time.");
+    startDetection(async () => {
+      const result = await detectScreenshotTimeRegionAction(validation.validationId, drawBounds);
+      if (!result.ok || !result.candidate) { toast.error(result.message); return; }
+      setCandidates((current) => [...current, result.candidate]);
+      if (result.candidate.validationStatus === "invalid") {
+        toast.error(result.candidate.validationMessage || "The highlighted time is outside this test attempt.");
+        return;
+      }
+      setSelections((current) => ({ ...current, timeCandidateId: result.candidate.id }));
+      setDrawing(false);
+      setDrawBounds(null);
+      setEditing(null);
+      toast.success("Screenshot time detected from the highlighted area.");
+    });
   }
 
   function confirm() {
@@ -72,37 +141,60 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
     });
   }
 
-  const summary = steps.map((item) => ({ ...item, candidate: validation.candidates.find((candidate) => candidate.id === selections[selectionKey(item.type)]) }));
+  const complete = selected.every((field) => field.candidate && !isInvalid(field.candidate));
+  const editingField = fields.find((field) => field.type === editing);
+
   return <Dialog open={open} onOpenChange={pending ? undefined : changeOpen}>
-    <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-5xl">
-      <DialogHeader className="pr-8"><DialogTitle>Step 2 of 5 · Confirm screenshot details</DialogTitle><DialogDescription>The system detected possible values from your screenshot. You must identify the correct evidence before continuing.</DialogDescription></DialogHeader>
-      <div className="rounded-md border border-primary/30 bg-primary/[0.05] p-3 text-xs leading-5"><p className="font-semibold text-primary">How to select a value</p><p className="mt-1 text-muted-foreground">Click a highlighted box directly on the screenshot, or click its detected value on the right. Confirm one value for each step. OCR values cannot be typed or edited.</p></div>
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
-        <div className="max-h-[68vh] overflow-auto rounded-md border border-border bg-black/30 p-2">
+    <DialogContent className="flex max-h-[94dvh] flex-col overflow-hidden p-0 sm:max-w-5xl">
+      <DialogHeader className="border-b border-border px-4 py-4 pr-12 sm:px-6">
+        <DialogTitle>Confirm screenshot details</DialogTitle>
+        <DialogDescription>Check the suggested values against the highlighted screenshot. Change only a value that was detected incorrectly.</DialogDescription>
+      </DialogHeader>
+
+      <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)] lg:overflow-hidden">
+        <div className="min-h-72 border-b border-border bg-black/35 p-3 lg:min-h-0 lg:overflow-auto lg:border-b-0 lg:border-r">
           <div className="relative mx-auto w-full max-w-xl">
-            {/* The uploaded file remains local in this modal; the stored evidence is the authoritative copy. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imageUrl} alt="Uploaded quote screenshot with selectable OCR boxes" className="block h-auto w-full" />
-            <svg className="absolute inset-0 size-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-label={`Selectable ${current.title.toLowerCase()} boxes`}>
-              {candidates.map((candidate) => <rect key={candidate.id} x={candidate.bounds.x} y={candidate.bounds.y} width={candidate.bounds.width} height={candidate.bounds.height} onClick={() => choose(candidate)} role="button" tabIndex={0} className={`cursor-pointer fill-current stroke-current [vector-effect:non-scaling-stroke] ${selectedId === candidate.id ? candidateIsInvalid(candidate) ? "text-red-400/25" : "text-primary/25" : "text-sky-400/10 hover:text-sky-300/20"}`} strokeWidth={selectedId === candidate.id ? 4 : 2} />)}
+            <img src={imageUrl} alt="Uploaded quote screenshot with highlighted detected values" className="block h-auto w-full" />
+            <svg className={`absolute inset-0 size-full touch-none ${drawing ? "cursor-crosshair" : ""}`} viewBox="0 0 1 1" preserveAspectRatio="none" aria-label="Detected screenshot values" onPointerDown={beginDraw} onPointerMove={continueDraw} onPointerUp={finishDraw}>
+              {selected.flatMap((field) => field.candidate ? [<rect key={field.type} x={field.candidate.bounds.x} y={field.candidate.bounds.y} width={field.candidate.bounds.width} height={field.candidate.bounds.height} className={`pointer-events-none fill-current stroke-current [vector-effect:non-scaling-stroke] ${field.fill}`} strokeWidth={4} />] : [])}
+              {editing ? choices.map((candidate) => <rect key={candidate.id} x={candidate.bounds.x} y={candidate.bounds.y} width={candidate.bounds.width} height={candidate.bounds.height} onClick={() => choose(candidate)} className={`cursor-pointer fill-current stroke-current [vector-effect:non-scaling-stroke] ${isInvalid(candidate) ? "text-red-400/10" : "text-white/10 hover:text-white/25"}`} strokeWidth={2} />) : null}
+              {drawBounds ? <rect x={drawBounds.x} y={drawBounds.y} width={drawBounds.width} height={drawBounds.height} className="pointer-events-none fill-amber-300/15 stroke-amber-300 [vector-effect:non-scaling-stroke]" strokeWidth={3} /> : null}
             </svg>
           </div>
         </div>
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-1.5">{steps.map((item, index) => <Badge key={item.type} variant={index === step ? "default" : index < step ? "secondary" : "outline"}>{index + 1}. {item.title}</Badge>)}</div>
-          {step < steps.length ? <>
-            <div><p className="text-sm font-semibold">{current.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{current.instruction}</p>{current.type === "ride_card" ? <p className="mt-2 text-xs">Required by assignment: <span className="font-medium text-primary">{expectedService}</span></p> : null}</div>
-            <div className="space-y-2">{candidates.map((candidate) => { const invalid = candidateIsInvalid(candidate); return <button key={candidate.id} type="button" onClick={() => choose(candidate)} className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-xs ${selectedId === candidate.id ? invalid ? "border-red-400 bg-red-400/10" : "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}><span className="min-w-0 truncate">{candidate.displayValue}</span>{selectedId === candidate.id ? <span className={`flex items-center gap-1 font-medium ${invalid ? "text-red-300" : "text-primary"}`}><Check className="size-4 shrink-0" />{invalid ? "Invalid" : "Selected"}</span> : <span className="text-muted-foreground">Choose</span>}</button>; })}</div>
-            {selectedInvalid ? <div className="rounded-md border border-red-400/40 bg-red-400/[0.06] p-3 text-xs text-red-200"><p className="font-semibold">Invalid {current.title.toLowerCase()}</p><p className="mt-1 leading-5">{selectedInvalidMessage} Choose another valid detected value. If none is correct, repeat the test and replace both the screenshot and screen recording.</p></div> : null}
-            {!candidates.length ? <div className="rounded-md border border-amber-400/30 bg-amber-400/5 p-3 text-xs text-amber-200"><p className="font-semibold">Required evidence was not detected</p><p className="mt-1 leading-5">The correct {current.title.toLowerCase()} is missing or unreadable. Close this review, repeat the test, and replace both the screenshot and screen recording. Required values cannot be entered manually.</p></div> : null}
-            <div className="rounded-md border border-border p-3 text-xs leading-5 text-muted-foreground"><span className="font-medium text-foreground">None of the choices is correct?</span> Close this review, repeat the test, and replace both the screenshot and screen recording.</div>
-            <div className="flex justify-between border-t border-border pt-4"><Button variant="outline" onClick={() => step === 0 ? changeOpen(false) : setStep((value) => value - 1)}>{step === 0 ? "Close review" : "Back"}</Button><Button disabled={!selectedId || selectedInvalid} onClick={() => step === steps.length - 1 ? setStep(steps.length) : setStep((value) => value + 1)}>{step === 0 ? "Confirm selected ride" : step === 1 ? "Confirm fare" : "Confirm screenshot time"}</Button></div>
-          </> : <>
-            <div><p className="text-sm font-semibold">Review selections</p><p className="mt-1 text-xs text-muted-foreground">These values come only from the selected OCR boxes.</p></div>
-            <div className="divide-y divide-border rounded-md border border-border">{summary.map((item) => <div key={item.type} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><span className="text-muted-foreground">{item.title}</span><span className="font-medium">{item.candidate?.displayValue ?? "Missing"}</span></div>)}</div>
-            <div className="flex justify-between border-t border-border pt-4"><Button variant="outline" disabled={pending} onClick={() => setStep(steps.length - 1)}>Back</Button><Button disabled={pending} onClick={confirm}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Confirming..." : "Confirm screenshot"}</Button></div>
-          </>}
+
+        <div className="space-y-4 p-4 lg:overflow-y-auto lg:p-5">
+          <div className="rounded-md border border-primary/30 bg-primary/[0.05] p-3 text-xs leading-5">
+            <p className="font-semibold text-primary">Suggested from your screenshot</p>
+            <p className="mt-1 text-muted-foreground">The final values remain linked to OCR regions. Typed replacements are not allowed.</p>
+          </div>
+
+          <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+            {selected.map((field) => <div key={field.type} className="grid grid-cols-[1fr_auto] items-center gap-3 p-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2"><span className={`size-2 shrink-0 rounded-full bg-current ${field.color}`} /><p className="text-[10px] uppercase text-muted-foreground">{field.title}</p></div>
+                <p className="mt-1 truncate text-sm font-semibold">{field.candidate?.displayValue ?? "Not detected"}</p>
+                {field.type === "ride_card" ? <p className="mt-1 text-[11px] text-muted-foreground">Required: {expectedService}</p> : null}
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={() => setEditing(field.type)}><Pencil className="size-3.5" />Change</Button>
+            </div>)}
+          </div>
+
+          {editing ? <div className="space-y-3 rounded-md border border-border p-3">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">Change {editingField?.title.toLowerCase()}</p><p className="mt-1 text-xs text-muted-foreground">Select a detected value below or tap its box in the screenshot.</p></div><Button type="button" size="icon-sm" variant="ghost" title="Cancel change" onClick={() => setEditing(null)}><RotateCcw className="size-4" /></Button></div>
+            <div className="space-y-2">{choices.map((candidate) => { const invalid = isInvalid(candidate); return <button key={candidate.id} type="button" disabled={invalid} onClick={() => choose(candidate)} className="flex min-h-10 w-full items-start justify-between gap-3 rounded-md border border-border px-3 py-2 text-left text-xs enabled:hover:border-primary/60 disabled:cursor-not-allowed disabled:opacity-60"><span className="min-w-0"><span className="block truncate">{candidate.displayValue}</span>{invalid && candidate.validationMessage ? <span className="mt-1 block text-[10px] leading-4 text-red-200">{candidate.validationMessage}</span> : null}</span><span className="shrink-0 pt-0.5 text-muted-foreground">{invalid ? "Unavailable" : "Select"}</span></button>; })}</div>
+            {!choices.length ? <p className="text-xs leading-5 text-amber-200">No value was detected. Replace the screenshot with a clearer full-screen image.</p> : choices.every(isInvalid) ? <p className="text-xs leading-5 text-amber-200">A value was detected, but it is outside the valid test attempt. Use a screenshot captured during the assigned window and upload it promptly.</p> : null}
+            {editing === "time" ? <Button type="button" variant={drawing ? "default" : "outline"} className="w-full" disabled={detecting} onClick={() => { setDrawing((value) => !value); setDrawBounds(null); }}>{detecting ? <LoaderCircle className="size-4 animate-spin" /> : <Crosshair className="size-4" />}{detecting ? "Reading highlighted area..." : drawing ? "Drag over the time above" : "Highlight time on screenshot"}</Button> : null}
+          </div> : null}
+
+          {!complete ? <div className="rounded-md border border-amber-400/35 bg-amber-400/[0.06] p-3 text-xs leading-5 text-amber-100"><p className="font-semibold">Some required values need attention</p><p className="mt-1">Choose a valid detected value. If none is available, close this review and replace the screenshot.</p></div> : null}
         </div>
+      </div>
+
+      <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <Button type="button" variant="outline" disabled={pending} onClick={() => changeOpen(false)}>Replace screenshot</Button>
+        <Button type="button" disabled={!complete || pending || editing !== null} onClick={confirm}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Confirming..." : "Confirm detected values"}</Button>
       </div>
     </DialogContent>
   </Dialog>;

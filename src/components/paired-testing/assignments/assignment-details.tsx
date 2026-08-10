@@ -11,11 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/paired-testing/shared/page-header";
 import { StatusBadge } from "@/components/paired-testing/shared/status-badge";
-import type { AssignmentOperationalSummary, AssignmentRouteGuidance, AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow } from "@/lib/data/assignments";
+import type { AssignmentOperationalSummary, AssignmentRouteGuidance, AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow, TesterWorkflowState } from "@/lib/data/assignments";
 import { cancelAssignmentAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import type { Study } from "@/lib/data/studies";
 import { TesterReadiness } from "@/components/paired-testing/assignments/tester-readiness";
-import { TesterStart } from "@/components/paired-testing/assignments/tester-start";
 import { TesterSubmissionForm } from "@/components/paired-testing/assignments/tester-submission-form";
 import type { ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
 
@@ -36,7 +35,7 @@ function formatSchedule(value: string | null, timezone: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
 }
 
-export function AssignmentDetails({ study, assignment, routeGuidance, submission, technicalProfile, evidence, screenshotValidation, screenshotPreviewUrl, currentUserId, canManage, operations }: { study: Study; assignment: AssignmentSummary; routeGuidance: AssignmentRouteGuidance | null; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; screenshotValidation: ScreenshotValidationResult | null; screenshotPreviewUrl: string; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null }) {
+export function AssignmentDetails({ study, assignment, routeGuidance, submission, technicalProfile, evidence, screenshotValidation, screenshotPreviewUrl, currentUserId, canManage, operations, workflow }: { study: Study; assignment: AssignmentSummary; routeGuidance: AssignmentRouteGuidance | null; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; screenshotValidation: ScreenshotValidationResult | null; screenshotPreviewUrl: string; currentUserId: string; canManage: boolean; operations: AssignmentOperationalSummary | null; workflow: TesterWorkflowState | null }) {
   const timezone = timezoneOf(assignment, study.display_timezone || "UTC");
   const testerA = assignment.testers.find((tester) => tester.slot === "tester_a");
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
@@ -47,8 +46,9 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
   const instructions = instructionsOf(assignment);
   const asynchronousTesting = assignment.testers.some((tester) => tester.testingSynchronization === "asynchronous");
   const showPreparation = !testerView || ownTester?.status === "assigned" || ownTester?.status === "ready";
+  const ownSubmissionIsFinal = submission?.status === "submitted" || ownTester?.status === "submitted";
 
-  if (testerView && ownTester?.status === "submitted") {
+  if (testerView && ownTester && ownSubmissionIsFinal) {
     return <TesterSubmissionReceipt study={study} assignment={assignment} tester={ownTester} submission={submission} evidence={evidence} timezone={timezone} />;
   }
 
@@ -57,7 +57,7 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
 
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-border py-3"><StatusBadge status={assignment.status} /><span className="mono text-xs text-muted-foreground">{assignment.protocolCode} v{assignment.protocolVersion}</span>{ownSlot ? <span className="text-xs font-medium">You are {ownSlot === "tester_a" ? "Tester A" : "Tester B"}</span> : null}</div>
 
-    {testerView && ownTester ? <WorkflowProgress status={ownTester.status} /> : null}
+    {testerView && ownTester ? <WorkflowProgress status={ownTester.status} workflow={workflow} /> : null}
 
     {showPreparation && instructions ? <section className="overflow-hidden rounded-md border border-primary/35 bg-primary/[0.045]">
       <div className="flex items-center gap-3 border-b border-primary/20 px-4 py-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10"><ClipboardList className="size-4 text-primary" /></div><div><p className="text-[10px] uppercase tracking-wider text-primary">Coordinator instructions</p><h2 className="mt-0.5 text-sm font-semibold">Read before beginning this paired session</h2></div></div>
@@ -70,15 +70,14 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
       <div className="bg-background p-4"><div className="flex gap-3"><CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" /><div><p className="text-[10px] uppercase text-muted-foreground">{asynchronousTesting ? "Your testing window" : "Shared testing window"}</p><p className="mt-2 text-sm font-semibold leading-6">{formatSchedule(ownTester?.scheduledStart ?? assignment.scheduled_start, timezone)}</p><p className="text-xs leading-5 text-muted-foreground">Until {formatSchedule(ownTester?.scheduledEnd ?? assignment.scheduled_end, timezone)}</p><p className="mono mt-2 text-[10px] text-primary">{timezone}</p>{asynchronousTesting ? <p className="mt-2 text-xs leading-5 text-muted-foreground">Your partner has a separate window. Request-time synchronization is not evaluated.</p> : null}</div></div></div>
     </div></section> : null}
 
-    {testerView && ownTester ? <div className="grid gap-4 border-t border-border pt-5 lg:grid-cols-2"><YourAssignment tester={ownTester} /><PartnerContact tester={partnerTester} /></div> : null}
+    {testerView && ownTester && showPreparation ? <div className="grid gap-4 border-t border-border pt-5 lg:grid-cols-2"><YourAssignment tester={ownTester} /><PartnerContact tester={partnerTester} /></div> : null}
 
     {ownTester ? <TesterReadiness assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
-    {ownTester?.status === "ready" ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
 
     {!testerView ? <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section> : null}
 
     {canManage && operations ? <OperationalProgress assignment={assignment} operations={operations} /> : null}
-    {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} /> : null}
+    {ownTester?.status === "in_progress" && !ownSubmissionIsFinal && workflow ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} workflow={workflow} partnerName={partnerTester?.displayName ?? "your partner"} /> : null}
   </div>;
 }
 
@@ -121,10 +120,10 @@ function Location({ label, value, instructions, accent }: { label: string; value
   return <div className="flex gap-3 bg-background p-4"><MapPin className={`mt-0.5 size-4 shrink-0 ${accent === "primary" ? "text-primary" : "text-amber-400"}`} /><div className="min-w-0"><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-semibold leading-5">{value}</p>{instructions ? <div className="mt-3 border-t border-border pt-3"><p className="text-[10px] uppercase text-muted-foreground">Instructions</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-foreground">{instructions}</p></div> : <p className="mt-2 text-xs text-muted-foreground">No additional instructions.</p>}</div></div>;
 }
 
-function WorkflowProgress({ status }: { status: AssignmentTesterSummary["status"] }) {
-  const current = status === "assigned" ? 1 : status === "ready" ? 3 : status === "in_progress" ? 4 : status === "submitted" ? 6 : 1;
-  const steps = ["Review", "Ready", "Start", "Record", "Evidence", "Submit"];
-  return <section aria-label="Testing progress"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] uppercase text-primary">Your progress</p><p className="text-[10px] text-muted-foreground">Step {current} of {steps.length}</p></div><div className="grid grid-cols-6 gap-1">{steps.map((step, index) => { const complete = index + 1 < current || status === "submitted"; const active = index + 1 === current && status !== "submitted"; return <div key={step} className="min-w-0"><div className={`h-1.5 rounded-sm ${complete || active ? "bg-primary" : "bg-secondary"}`} /><p className={`mt-2 hidden truncate text-[9px] sm:block ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}>{step}</p></div>; })}</div></section>;
+function WorkflowProgress({ status, workflow }: { status: AssignmentTesterSummary["status"]; workflow: TesterWorkflowState | null }) {
+  const current = status === "submitted" ? 5 : workflow?.bothEvidenceReady ? 4 : status === "in_progress" ? 3 : status === "ready" ? 2 : 1;
+  const steps = ["Scheduled", "Ready", "Capture & Upload", "Details", "Submitted"];
+  return <section aria-label="Testing progress"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] uppercase text-primary">Your progress</p><p className="text-[10px] text-muted-foreground">Step {current} of {steps.length}</p></div><div className="grid grid-cols-5 gap-1">{steps.map((step, index) => { const complete = index + 1 < current || status === "submitted"; const active = index + 1 === current && status !== "submitted"; return <div key={step} className="min-w-0"><div className={`h-1.5 rounded-sm ${complete || active ? "bg-primary" : "bg-secondary"}`} /><p className={`mt-2 hidden truncate text-[9px] sm:block ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}>{step}</p></div>; })}</div></section>;
 }
 
 function YourAssignment({ tester }: { tester: AssignmentTesterSummary }) {

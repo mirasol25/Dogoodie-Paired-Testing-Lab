@@ -1,54 +1,83 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check, Clock3, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { confirmReadyAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import type { AssignmentSummary, AssignmentTesterSummary } from "@/lib/data/assignments";
-import type { Json } from "@/types/database.types";
+import { createClient } from "@/lib/supabase/client";
 
-function labelsFromJson(value: Json): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => entry && typeof entry === "object" && !Array.isArray(entry) && typeof entry.label === "string" ? [entry.label] : []);
+function countdownLabel(milliseconds: number) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return [hours, minutes, remainder].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 export function TesterReadiness({ assignment, ownSlot, partnerSlot }: { assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary; partnerSlot?: AssignmentTesterSummary }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const checklist = useMemo(() => {
-    const technicalControls = labelsFromJson(assignment.protocolFixedControls).filter((label) => !["Provider", "Exact ride tier", "Pickup location", "Destination location"].includes(label));
-    return [
-      `I am using ${ownSlot.platformName ?? "the assigned provider"} - ${ownSlot.serviceName ?? "the assigned ride tier"}.`,
-      `My assigned condition is ${ownSlot.protocolValue ?? "the condition shown above"}.`,
-      `My route is ${assignment.pickup_location} to ${assignment.destination_location}.`,
-      ...technicalControls.map((label) => `${label} matches the assignment requirements.`),
-      "I will wait for the coordinated start cue before requesting the quote.",
-    ];
-  }, [assignment, ownSlot]);
-  const [checked, setChecked] = useState<string[]>([]);
-  const ready = ownSlot.status === "ready";
-  const bothReady = ready && (partnerSlot?.status === "ready" || partnerSlot?.status === "in_progress");
+  const [now, setNow] = useState<number | null>(null);
+  const startsAt = new Date(ownSlot.scheduledStart ?? assignment.scheduled_start ?? 0).getTime();
+  const endsAt = new Date(ownSlot.scheduledEnd ?? assignment.scheduled_end ?? 0).getTime();
 
-  if (ready) return <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Check className="size-4" /></div><div><h2 className="text-sm font-semibold">{bothReady ? "Both testers are ready" : "You are ready"}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{bothReady ? "The synchronized start control is available below." : "Waiting for the partner tester to confirm readiness."}</p></div></div></section>;
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  if (ownSlot.status !== "assigned" || assignment.status !== "not_started") return null;
-  const complete = checked.length === checklist.length;
+  useEffect(() => {
+    if (!["assigned", "ready"].includes(ownSlot.status)) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`assignment-readiness:${assignment.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "assignment_testers",
+        filter: `assignment_id=eq.${assignment.id}`,
+      }, () => router.refresh())
+      .subscribe();
+    const fallback = window.setInterval(() => router.refresh(), 30_000);
+    return () => {
+      window.clearInterval(fallback);
+      void supabase.removeChannel(channel);
+    };
+  }, [assignment.id, ownSlot.status, router]);
 
-  function confirm() {
-    if (!complete) return;
+  if (ownSlot.status === "in_progress" || ownSlot.status === "submitted") return null;
+  const beforeWindow = now === null || !Number.isFinite(startsAt) || now < startsAt;
+  const afterWindow = now !== null && Number.isFinite(endsAt) && now > endsAt;
+
+  if (beforeWindow) return <section className="rounded-md border border-border bg-card/20 p-5 text-center">
+    <Clock3 className="mx-auto size-5 text-primary" />
+    <p className="mt-3 text-[10px] uppercase text-muted-foreground">Testing starts in</p>
+    <p className="numeric mt-1 text-3xl font-semibold text-primary">{now === null || !Number.isFinite(startsAt) ? "--:--:--" : countdownLabel(startsAt - now)}</p>
+    <p className="mt-3 text-sm font-medium">The testing window has not opened</p>
+    <p className="mt-1 text-xs text-muted-foreground">Review your route, assigned service, and partner details above. Readiness and evidence controls will appear automatically.</p>
+  </section>;
+
+  if (ownSlot.status === "ready") return <section className="rounded-md border border-primary/30 bg-primary/[0.04] p-5">
+    <div className="flex items-start gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Check className="size-4" /></div><div><h2 className="text-base font-semibold">You are ready</h2><p className="mt-1 text-sm text-muted-foreground">Your partner has been notified.</p><p className="mt-3 text-xs font-medium text-primary">Waiting for {partnerSlot?.displayName ?? "your partner"}...</p></div></div>
+  </section>;
+
+  if (afterWindow) return <section className="rounded-md border border-red-400/35 bg-red-400/[0.04] p-5"><h2 className="text-sm font-semibold">Testing window closed</h2><p className="mt-1 text-xs text-muted-foreground">Contact the study coordinator to reschedule this assignment.</p></section>;
+
+  function notifyPartner() {
     startTransition(async () => {
       const result = await confirmReadyAction(assignment.id);
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-      toast.success(result.message);
+      if (!result.ok) { toast.error(result.message); return; }
+      toast.success("You are marked as ready.");
       router.refresh();
     });
   }
 
-  return <section className="space-y-5 border-y border-border py-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] uppercase text-primary">Your next action</p><h2 className="mt-1.5 text-lg font-semibold">Confirm your assignment</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">Verify each condition before the testing window. Screenshot and screen-recording preparation happens immediately before you start.</p></div><div className="min-w-24 text-right"><p className="numeric text-2xl font-semibold text-primary">{checked.length}/{checklist.length}</p><p className="text-[10px] uppercase text-muted-foreground">Confirmed</p></div></div><div className="divide-y divide-border overflow-hidden rounded-md border border-border">{checklist.map((item) => { const selected = checked.includes(item); return <label key={item} className={`flex min-h-14 cursor-pointer items-start gap-3 px-4 py-4 text-sm leading-6 transition-colors ${selected ? "bg-primary/[0.055]" : "hover:bg-secondary/30"}`}><Checkbox className="mt-0.5" checked={selected} onCheckedChange={(value) => setChecked((current) => value === true ? [...current, item] : current.filter((entry) => entry !== item))} /><span className={selected ? "text-foreground" : "text-muted-foreground"}>{item}</span></label>; })}</div><div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-md border border-border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-muted-foreground">{complete ? "All conditions are confirmed. Continue when you are ready." : `${checklist.length - checked.length} condition${checklist.length - checked.length === 1 ? "" : "s"} remaining.`}</p><Button className="w-full sm:w-auto" onClick={confirm} disabled={!complete || pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Confirming..." : "Confirm ready"}</Button></div></section>;
+  const partnerReady = partnerSlot?.status === "ready" || partnerSlot?.status === "in_progress" || partnerSlot?.status === "submitted";
+  const partnerLabel = partnerSlot?.slot === "tester_a" ? "Tester A" : partnerSlot?.slot === "tester_b" ? "Tester B" : "Your partner";
+  return <section className="rounded-md border border-primary/30 bg-primary/[0.035] p-5"><div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[10px] uppercase text-primary">Testing window open</p><h2 className="mt-1.5 text-lg font-semibold">Ready to begin?</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Confirm that you are at the assigned pickup location, have the correct ride service available, and can begin now.</p>{partnerReady ? <p className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-primary"><Check className="size-3.5" />{partnerLabel} is ready</p> : <p className="mt-3 text-xs text-muted-foreground">{partnerLabel} has not marked themselves ready yet.</p>}</div><Button className="w-full sm:w-auto" onClick={notifyPartner} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Marking ready..." : "I'm ready"}</Button></div></section>;
 }

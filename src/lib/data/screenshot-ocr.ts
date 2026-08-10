@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { extractSelectedRide } from "@/lib/screenshot-ocr/extract-selected-ride";
 import { resolveScreenshotService, validateRequiredService, type OCRService } from "@/lib/screenshot-ocr/service-resolver";
 import { resolveQuoteTime } from "@/lib/screenshot-ocr/time-parser";
-import type { ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
+import { parseStatusBarTime } from "@/lib/screenshot-ocr/time-parser";
+import { recognizeWithGoogleVision } from "@/lib/screenshot-ocr/google-vision";
+import sharp from "sharp";
+import type { NormalizedBounds, ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
 
 export class ScreenshotOCRError extends Error {}
 
@@ -112,6 +115,58 @@ export async function processScreenshotEvidence(evidenceFileId: string): Promise
 
 function selectedCandidate(candidates: ScreenshotCandidate[], id: string, type: ScreenshotCandidate["type"]) {
   return candidates.find((candidate) => candidate.id === id && candidate.type === type);
+}
+
+export async function detectTimeCandidateFromRegion(validationId: string, bounds: NormalizedBounds, userId: string): Promise<ScreenshotCandidate> {
+  const values = [bounds.x, bounds.y, bounds.width, bounds.height];
+  if (values.some((value) => !Number.isFinite(value)) || bounds.x < 0 || bounds.y < 0 || bounds.width < 0.02 || bounds.height < 0.01 || bounds.x + bounds.width > 1 || bounds.y + bounds.height > 1) {
+    throw new ScreenshotOCRError("Draw a box closely around the complete status-bar time.");
+  }
+  const supabase = await createClient();
+  const db = supabase as unknown as { from: (table: string) => any; storage: any };
+  const { data: validation } = await db.from("screenshot_ocr_validations").select("*").eq("id", validationId).eq("is_active", true).maybeSingle();
+  if (!validation) throw new ScreenshotOCRError("The screenshot candidates are no longer available.");
+  const { data: evidence } = await db.from("evidence_files").select("uploaded_at,uploaded_by,study_id,assignment_id,storage_bucket,storage_path").eq("id", validation.evidence_file_id).eq("uploaded_by", userId).maybeSingle();
+  if (!evidence) throw new ScreenshotOCRError("The screenshot evidence is unavailable.");
+  const { data: file, error: fileError } = await supabase.storage.from(evidence.storage_bucket).download(evidence.storage_path);
+  if (fileError || !file) throw new ScreenshotOCRError("The screenshot could not be read.");
+  const image = Buffer.from(await file.arrayBuffer());
+  const metadata = await sharp(image).metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (!width || !height) throw new ScreenshotOCRError("The screenshot dimensions could not be read.");
+  const left = Math.max(0, Math.floor(bounds.x * width));
+  const top = Math.max(0, Math.floor(bounds.y * height));
+  const cropWidth = Math.min(width - left, Math.max(1, Math.ceil(bounds.width * width)));
+  const cropHeight = Math.min(height - top, Math.max(1, Math.ceil(bounds.height * height)));
+  const cropped = await sharp(image).extract({ left, top, width: cropWidth, height: cropHeight }).png().toBuffer();
+  const recognized = await recognizeWithGoogleVision(cropped);
+  const parsedTime = parseStatusBarTime(recognized.text);
+  if (!parsedTime) throw new ScreenshotOCRError("No time was readable inside that box. Draw a tighter box around the complete time.");
+  const { data: study } = await db.from("studies").select("display_timezone").eq("id", evidence.study_id).maybeSingle();
+  const { data: assignment } = await db.from("assignments").select("scheduled_start").eq("id", evidence.assignment_id).maybeSingle();
+  const resolution = resolveQuoteTime(parsedTime, evidence.uploaded_at, study?.display_timezone || "UTC");
+  const resolvedTime = resolution.resolvedTimestamp ? new Date(resolution.resolvedTimestamp).getTime() : Number.NaN;
+  const startsAt = assignment?.scheduled_start ? new Date(assignment.scheduled_start).getTime() : Number.NaN;
+  const uploadedAt = new Date(evidence.uploaded_at).getTime();
+  const beforeTest = Number.isFinite(resolvedTime) && Number.isFinite(startsAt) && resolvedTime < startsAt;
+  const afterUpload = Number.isFinite(resolvedTime) && resolvedTime > uploadedAt + 120_000;
+  const invalid = !resolution.resolvedTimestamp || beforeTest || afterUpload;
+  const candidate: ScreenshotCandidate = {
+    id: `time-region-${crypto.randomUUID()}`,
+    type: "time",
+    text: recognized.text.trim(),
+    displayValue: parsedTime,
+    parsedValue: parsedTime,
+    bounds,
+    validationStatus: invalid ? "invalid" : "valid",
+    validationMessage: beforeTest ? "This time is before the assigned test window." : afterUpload ? "This time is later than the screenshot upload." : !resolution.resolvedTimestamp ? "This time is too far from the current test upload." : null,
+  };
+  const candidates = [...(validation.candidates as ScreenshotCandidate[]).filter((item) => item.id !== candidate.id), candidate];
+  const admin = createAdminClient() as unknown as { from: (table: string) => any };
+  const { error: updateError } = await admin.from("screenshot_ocr_validations").update({ candidates }).eq("id", validationId).eq("is_active", true);
+  if (updateError) throw new ScreenshotOCRError("The highlighted time could not be saved.");
+  return candidate;
 }
 
 export async function confirmScreenshotCandidateSelection(validationId: string, selections: ScreenshotCandidateSelections, userId: string): Promise<ScreenshotValidationResult> {

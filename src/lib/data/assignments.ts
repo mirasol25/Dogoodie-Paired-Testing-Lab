@@ -103,6 +103,14 @@ export interface AssignmentOperationalSummary {
   pair: { id: string; pairCode: string; technicalStatus: string; evidenceStatus: string } | null;
 }
 
+export interface TesterWorkflowState {
+  bothReady: boolean;
+  captureAcknowledged: boolean;
+  ownEvidenceReady: boolean;
+  partnerEvidenceReady: boolean;
+  bothEvidenceReady: boolean;
+}
+
 export interface AssignmentRouteGuidance {
   pickupInstructions: string | null;
   destinationInstructions: string | null;
@@ -324,6 +332,26 @@ export async function confirmAssignmentReady(assignmentId: string): Promise<void
   const supabase = await createClient();
   const { error } = await supabase.rpc("confirm_assignment_ready", { p_assignment_id: assignmentId });
   if (error) throw new AssignmentDataError(error.message || "Readiness could not be confirmed.");
+}
+
+export async function completeAssignmentCaptureChecklist(assignmentId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("complete_assignment_capture_checklist" as never, { p_assignment_id: assignmentId } as never);
+  if (error) throw new AssignmentDataError(error.message || "The capture checklist could not be completed.");
+}
+
+export async function getTesterWorkflowState(assignmentId: string): Promise<TesterWorkflowState> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_assignment_tester_workflow_state" as never, { p_assignment_id: assignmentId } as never);
+  if (error || !data) throw new AssignmentDataError(error?.message || "The tester workflow could not be loaded.");
+  const value = data as unknown as Record<string, boolean>;
+  return {
+    bothReady: value.both_ready === true,
+    captureAcknowledged: value.capture_acknowledged === true,
+    ownEvidenceReady: value.own_evidence_ready === true,
+    partnerEvidenceReady: value.partner_evidence_ready === true,
+    bothEvidenceReady: value.both_evidence_ready === true,
+  };
 }
 
 export async function startAssignmentTest(assignmentId: string): Promise<void> {

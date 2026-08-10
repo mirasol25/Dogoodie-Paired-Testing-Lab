@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth/server";
-import { AssignmentDataError, cancelAssignment, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
+import { AssignmentDataError, cancelAssignment, completeAssignmentCaptureChecklist, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
 import { requireRole } from "@/lib/auth/server";
-import { confirmScreenshotCandidateSelection, ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
-import type { ScreenshotCandidateSelections } from "@/lib/screenshot-ocr/schemas";
+import { confirmScreenshotCandidateSelection, detectTimeCandidateFromRegion, ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
+import type { NormalizedBounds, ScreenshotCandidateSelections } from "@/lib/screenshot-ocr/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { submissionDraftClientSchema } from "@/lib/validation/submission-schemas";
 
@@ -137,6 +137,42 @@ export async function confirmScreenshotCandidatesAction(validationId: string, se
     return { ok: true, message: validation.serviceValidation === "matched" ? "Screenshot details confirmed and the ride tier matches." : "The selected ride tier does not match this assignment.", validation };
   } catch (error) {
     return { ok: false, message: error instanceof ScreenshotOCRError ? error.message : "Screenshot selections could not be confirmed." };
+  }
+}
+
+export async function completeCaptureChecklistAction(assignmentId: string): Promise<{ ok: boolean; message: string }> {
+  await requireActiveUser(`/paired-testing-demo/assignments/${assignmentId}`);
+  try {
+    await completeAssignmentCaptureChecklist(assignmentId);
+    revalidatePath(`/paired-testing-demo/assignments/${assignmentId}`);
+    return { ok: true, message: "Evidence upload is now available." };
+  } catch (error) {
+    if (error instanceof AssignmentDataError) return { ok: false, message: error.message };
+    return { ok: false, message: "The capture checklist could not be completed." };
+  }
+}
+
+export async function validateCurrentLocationAction(assignmentId: string, latitude: number, longitude: number) {
+  await requireActiveUser(`/paired-testing-demo/assignments/${assignmentId}`);
+  const supabase = await createClient();
+  const rpcClient = supabase as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }> };
+  const { data, error } = await rpcClient.rpc("validate_assignment_pickup_location", {
+    p_assignment_id: assignmentId,
+    p_latitude: latitude,
+    p_longitude: longitude,
+  });
+  if (error || !data) return { ok: false as const, message: error?.message || "Current location could not be validated." };
+  const result = data as { distance_feet: number; preferred_max_feet: number; maximum_feet: number; status: "pass" | "warning" | "fail"; pickup_label: string };
+  return { ok: true as const, result };
+}
+
+export async function detectScreenshotTimeRegionAction(validationId: string, bounds: NormalizedBounds) {
+  const identity = await requireActiveUser("/paired-testing-demo/assignments");
+  try {
+    const candidate = await detectTimeCandidateFromRegion(validationId, bounds, identity.user.id);
+    return { ok: true as const, message: "Highlighted time detected.", candidate };
+  } catch (error) {
+    return { ok: false as const, message: error instanceof ScreenshotOCRError ? error.message : "The highlighted time could not be detected." };
   }
 }
 

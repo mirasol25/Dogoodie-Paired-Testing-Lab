@@ -3,7 +3,7 @@ import { AssignmentDetails } from "@/components/paired-testing/assignments/assig
 import { requireActiveUser } from "@/lib/auth/server";
 import { canManageAssignments } from "@/lib/auth/assignment-permissions";
 import { getActiveStudy } from "@/lib/data/active-study";
-import { getAccessibleAssignmentStudyId, getAssignmentOperationalSummary, getAssignmentRouteGuidance, getLatestTesterTechnicalProfile, getOwnAssignmentSubmission, getOwnSubmissionEvidence, getStudyAssignment } from "@/lib/data/assignments";
+import { getAccessibleAssignmentStudyId, getAssignmentOperationalSummary, getAssignmentRouteGuidance, getLatestTesterTechnicalProfile, getOwnAssignmentSubmission, getOwnSubmissionEvidence, getStudyAssignment, getTesterWorkflowState } from "@/lib/data/assignments";
 import { getAccessibleStudyById } from "@/lib/data/studies";
 import { getRestoredSubmissionScreenshotValidation } from "@/lib/data/screenshot-ocr";
 import { createClient } from "@/lib/supabase/server";
@@ -40,5 +40,6 @@ export default async function AssignmentDetailsPage({ params }: { params: Promis
     screenshotPreviewUrl = data?.signedUrl ?? "";
   }
   const operations = canManage ? await getAssignmentOperationalSummary(assignment.id) : null;
-  return <AssignmentDetails study={study} assignment={assignment} routeGuidance={routeGuidance} submission={submission} technicalProfile={technicalProfile} evidence={evidence} screenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} currentUserId={identity.user.id} canManage={canManage} operations={operations} />;
+  const workflow = identity.profile.role === "tester" ? await getTesterWorkflowState(assignment.id) : null;
+  return <AssignmentDetails study={study} assignment={assignment} routeGuidance={routeGuidance} submission={submission} technicalProfile={technicalProfile} evidence={evidence} screenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} currentUserId={identity.user.id} canManage={canManage} operations={operations} workflow={workflow} />;
 }
