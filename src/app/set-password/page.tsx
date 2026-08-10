@@ -20,7 +20,7 @@ export default async function SetPasswordPage() {
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           Finish setting up <span className="text-foreground">{user.email}</span> to access the Paired Testing Lab.
         </p>
-        <div className="mt-7"><SetPasswordForm /></div>
+        <div className="mt-7"><SetPasswordForm draftKey={user.id} /></div>
       </section>
     </main>
   );

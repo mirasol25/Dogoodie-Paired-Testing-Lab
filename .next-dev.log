@@ -1,0 +1,22 @@
+
+> dogoodie-paired-testing-lab@0.1.0 dev
+> next dev --webpack
+
+▲ Next.js 16.2.10 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+- Environments: .env.local
+✓ Ready in 933ms
+
+○ Compiling /login ...
+ GET /login?next=%2Fstudies 200 in 12.4s (next.js: 11.8s, proxy.ts: 25ms, application-code: 551ms)
+ GET /login?next=%2Fstudies%2Fa46c7ee2-efdb-463b-b691-8f519c87064a%2Fassignments 200 in 51s (next.js: 34ms, proxy.ts: 25.5s, application-code: 25.9s)
+ GET /login?next=%2Fstudies%2Fa46c7ee2-efdb-463b-b691-8f519c87064a%2Fassignments 200 in 51s (next.js: 89ms, proxy.ts: 25.6s, application-code: 25.8s)
+ POST /login?next=%2Fstudies 200 in 167ms (next.js: 9ms, proxy.ts: 31ms, application-code: 127ms)
+  └─ ƒ signInAction({}, {}) in 15ms ..//src/app/auth/actions.ts
+ POST /login?next=%2Fstudies 200 in 67ms (next.js: 8ms, proxy.ts: 23ms, application-code: 35ms)
+  └─ ƒ signInAction({"message":"The email or password is incorrect, or this internal account is unavailable."}, {}) in 22ms ..//src/app/auth/actions.ts
+ POST /login?next=%2Fstudies 200 in 89ms (next.js: 6ms, proxy.ts: 52ms, application-code: 31ms)
+  └─ ƒ signInAction({"message":"The email or password is incorrect, or this internal account is unavailable."}, {}) in 19ms ..//src/app/auth/actions.ts
+ GET /login?next=%2Fstudies 200 in 101ms (next.js: 6ms, proxy.ts: 20ms, application-code: 75ms)
+[?25h

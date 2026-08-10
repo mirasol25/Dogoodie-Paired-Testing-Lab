@@ -461,10 +461,10 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
         if (!initialData) window.localStorage.removeItem(creationDraftKey);
         toast.success(result.message);
         if (initialData) {
-          router.push("/paired-testing-demo/studies");
+          router.push("/studies");
           router.refresh();
         } else if (result.studyId) {
-          router.push(`/paired-testing-demo/studies/${result.studyId}/members`);
+          router.push(`/studies/${result.studyId}/members`);
           router.refresh();
         }
       } else toast.error(result.message);
@@ -472,11 +472,17 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
   }
 
   return (
-    <div className="space-y-7">
+    <div className="relative space-y-7" aria-busy={pending}>
+      {pending ? <div className="fixed inset-0 z-[80] grid place-items-center bg-background/75 px-4 backdrop-blur-sm" role="status" aria-live="polite">
+        <div className="flex w-full max-w-sm items-center gap-4 rounded-md border border-primary/30 bg-card p-5 shadow-2xl">
+          <span className="grid size-11 shrink-0 place-items-center rounded-md border border-primary/25 bg-primary/10"><LoaderCircle className="size-5 animate-spin text-primary" /></span>
+          <div><p className="text-sm font-semibold">{initialData ? "Saving study changes" : "Creating study"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{initialData ? "Updating the study configuration and initial route..." : "Creating the study, validating its route, and preparing the workspace..."}</p></div>
+        </div>
+      </div> : null}
       <div className="overflow-hidden rounded-md border border-border bg-secondary/10">
         <div className="grid grid-cols-2 sm:grid-cols-4">
         {stepLabels.map((label, index) => (
-          <button key={label} type="button" onClick={() => goToStep(index)} className={`min-h-20 border-b-2 px-3 py-3 text-left transition-colors sm:min-h-24 ${step === index ? "border-primary bg-primary/[0.06]" : "border-transparent hover:bg-secondary/50"}`} aria-current={step === index ? "step" : undefined}>
+          <button key={label} type="button" onClick={() => goToStep(index)} disabled={pending} className={`min-h-20 border-b-2 px-3 py-3 text-left transition-colors disabled:cursor-wait sm:min-h-24 ${step === index ? "border-primary bg-primary/[0.06]" : "border-transparent hover:bg-secondary/50"}`} aria-current={step === index ? "step" : undefined}>
             <span className="flex items-center gap-2 text-xs font-semibold"><span className={`flex size-6 shrink-0 items-center justify-center rounded-full border ${index < step ? "border-primary bg-primary text-primary-foreground" : step === index ? "border-primary text-primary" : "border-border text-muted-foreground"}`}>{index < step ? <Check className="size-3.5" /> : index + 1}</span><span className={step === index ? "text-foreground" : "text-muted-foreground"}>{label}</span></span>
             <span className="mt-2 hidden text-[10px] leading-4 text-muted-foreground sm:block">{stepDescriptions[index]}</span>
           </button>
@@ -622,8 +628,8 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
       ) : null}
 
       <div className="sticky bottom-0 z-10 flex items-center justify-between border-t border-border bg-background/95 py-4 backdrop-blur">
-        <Button type="button" variant="outline" onClick={() => goToStep(Math.max(0, step - 1))} disabled={step === 0}><ChevronLeft className="size-4" /><span className="sm:hidden">Back</span><span className="hidden sm:inline">{step === 0 ? "Back" : stepLabels[step - 1]}</span></Button>
-        {step < 3 ? <Button type="button" onClick={() => goToStep(step + 1)}><span className="sm:hidden">Continue</span><span className="hidden sm:inline">Continue to {stepLabels[step + 1]}</span><ChevronRight className="size-4" /></Button> : <Button type="button" onClick={submit} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? (initialData ? "Saving changes..." : "Creating study...") : (initialData ? "Save study changes" : "Create study")}</Button>}
+        <Button type="button" variant="outline" onClick={() => goToStep(Math.max(0, step - 1))} disabled={step === 0 || pending}><ChevronLeft className="size-4" /><span className="sm:hidden">Back</span><span className="hidden sm:inline">{step === 0 ? "Back" : stepLabels[step - 1]}</span></Button>
+        {step < 3 ? <Button type="button" onClick={() => goToStep(step + 1)} disabled={pending}><span className="sm:hidden">Continue</span><span className="hidden sm:inline">Continue to {stepLabels[step + 1]}</span><ChevronRight className="size-4" /></Button> : <Button type="button" onClick={submit} disabled={pending}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? (initialData ? "Saving changes..." : "Creating study...") : (initialData ? "Save study changes" : "Create study")}</Button>}
       </div>
     </div>
   );
@@ -692,6 +698,7 @@ function DraftStudyActions({ study }: { study: Study }) {
 }
 
 function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive, readiness, providerOptions }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
+  const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -701,10 +708,14 @@ function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive,
     return (status === "all" || study.status === status)
       && (!needle || `${study.name} ${study.study_code} ${services}`.toLowerCase().includes(needle));
   }), [providerOptions, query, status, studies]);
-  function select(study: Study) {
+  function openStudy(study: Study) {
+    if (study.id === activeStudyId) {
+      router.push(`/studies/${study.id}`);
+      return;
+    }
     setPendingId(study.id);
     void selectStudyAction(study.id).then((result) => {
-      if (result.ok) toast.success(result.message);
+      if (result.ok) router.push(`/studies/${study.id}`);
       else toast.error(result.message);
       setPendingId(null);
     });
@@ -718,11 +729,11 @@ function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive,
   return <div className="space-y-4"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{summary.map((item) => <div key={item.label} className="rounded-md border border-border bg-secondary/15 px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">{item.label}</p><p className="mt-1 text-xl font-semibold">{item.value}</p></div>)}</div><div className="flex flex-col gap-3 border-y border-border py-3 sm:flex-row sm:items-center sm:justify-between"><div className="relative w-full sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, code, provider, or tier" className="pl-9" /></div><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div><div className="overflow-x-auto rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{filteredStudies.map((study) => {
     const serviceLabel = configuredStudyServices(study, providerOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
     const canManageDraft = study.status === "draft" && !activeProtocolStudyIds.includes(study.id);
-    return <TableRow key={study.id} className={study.id === activeStudyId ? "bg-primary/[0.035]" : undefined}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><Link href={`/studies/${study.id}`} className="font-medium hover:text-primary hover:underline">{study.name}</Link>{study.id === activeStudyId ? <Badge variant="outline">Current workspace</Badge> : null}</div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-80"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/studies/${study.id}`}><ArrowRight className="size-3.5" />Open</Link></Button><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "default"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select study"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
+    return <TableRow key={study.id} className={study.id === activeStudyId ? "bg-primary/[0.035]" : undefined}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => openStudy(study)} disabled={pendingId === study.id} className="text-left font-medium hover:text-primary hover:underline disabled:cursor-wait">{study.name}</button>{study.id === activeStudyId ? <Badge variant="outline">Current workspace</Badge> : null}</div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-64"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" onClick={() => openStudy(study)} disabled={pendingId === study.id}>{pendingId === study.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}{pendingId === study.id ? "Opening..." : "Open"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
   })}{!filteredStudies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies match the current filters.</TableCell></TableRow> : null}</TableBody></Table></div><p className="text-xs text-muted-foreground">Showing {filteredStudies.length} of {studies.length} studies</p></div>;
 }
 
 export function StudiesManager({ studies, activeStudyId, activeProtocolStudyIds, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
   const [tab, setTab] = useState("studies");
-  return <Tabs value={tab} onValueChange={setTab}><div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between"><div><TabsList><TabsTrigger value="studies">Study register</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><p className="mt-2 text-xs text-muted-foreground">Select a study to load its workspace, or manage its members and lifecycle.</p></div><Button onClick={() => setTab("create")}><Plus className="size-4" />New study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} activeProtocolStudyIds={activeProtocolStudyIds} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
+  return <Tabs value={tab} onValueChange={setTab}><div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between"><div><TabsList><TabsTrigger value="studies">Study register</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><p className="mt-2 text-xs text-muted-foreground">Open a study to load its workspace, or manage its members and lifecycle.</p></div><Button onClick={() => setTab("create")}><Plus className="size-4" />New study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} activeProtocolStudyIds={activeProtocolStudyIds} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
 }
