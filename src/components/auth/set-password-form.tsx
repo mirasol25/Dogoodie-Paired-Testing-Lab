@@ -17,6 +17,15 @@ const operatingSystemVersions = {
   Android: ["Android 16", "Android 15", "Android 14", "Android 13", "Android 12", "Android 11", "Android 10"],
 } as const;
 
+interface SetupDraft {
+  step: number;
+  location: { latitude: string; longitude: string } | null;
+  locationStatus: "idle" | "ready" | "error";
+  deviceType: string;
+  operatingSystem: string;
+  operatingSystemVersion: string;
+}
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -27,7 +36,7 @@ function SubmitButton() {
   );
 }
 
-export function SetPasswordForm() {
+export function SetPasswordForm({ draftKey }: { draftKey: string }) {
   const [state, action] = useActionState(setPasswordAction, initialState);
   const [step, setStep] = useState(1);
   const [location, setLocation] = useState<{ latitude: string; longitude: string } | null>(null);
@@ -37,6 +46,7 @@ export function SetPasswordForm() {
   const [operatingSystemVersion, setOperatingSystemVersion] = useState("");
   const [clientError, setClientError] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
   const languageRef = useRef<HTMLInputElement>(null);
   const timezoneRef = useRef<HTMLInputElement>(null);
   const screenSizeRef = useRef<HTMLInputElement>(null);
@@ -48,6 +58,53 @@ export function SetPasswordForm() {
     if (screenSizeRef.current) screenSizeRef.current.value = `${window.screen.width}x${window.screen.height}`;
     if (userAgentRef.current) userAgentRef.current.value = navigator.userAgent;
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = window.sessionStorage.getItem(`invitation-setup:${draftKey}`);
+        if (stored) {
+          const draft = JSON.parse(stored) as Partial<SetupDraft>;
+          const restoredOs = draft.operatingSystem === "iOS" || draft.operatingSystem === "Android" ? draft.operatingSystem : "";
+          const allowedVersions = restoredOs ? operatingSystemVersions[restoredOs] : [];
+          const restoredDevice = typeof draft.deviceType === "string" ? draft.deviceType.slice(0, 100) : "";
+          const restoredVersion = typeof draft.operatingSystemVersion === "string" && allowedVersions.some((version) => version === draft.operatingSystemVersion) ? draft.operatingSystemVersion : "";
+          const hasCoordinates = Boolean(draft.location && typeof draft.location.latitude === "string" && typeof draft.location.longitude === "string");
+          const hasLocationResult = hasCoordinates || draft.locationStatus === "error";
+          const hasDeviceProfile = Boolean(restoredDevice.trim() && restoredOs && restoredVersion);
+          setDeviceType(restoredDevice);
+          setOperatingSystem(restoredOs);
+          setOperatingSystemVersion(restoredVersion);
+          if (hasCoordinates && draft.location) {
+            setLocation(draft.location);
+            setLocationStatus("ready");
+          } else if (draft.locationStatus === "error") setLocationStatus("error");
+          setStep(draft.step === 3 && hasLocationResult && hasDeviceProfile ? 3 : draft.step && draft.step >= 2 && hasLocationResult ? 2 : 1);
+        }
+      } catch {
+        window.sessionStorage.removeItem(`invitation-setup:${draftKey}`);
+      }
+      setDraftReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const draft: SetupDraft = {
+      step,
+      location,
+      locationStatus: locationStatus === "loading" ? "idle" : locationStatus,
+      deviceType,
+      operatingSystem,
+      operatingSystemVersion,
+    };
+    try {
+      window.sessionStorage.setItem(`invitation-setup:${draftKey}`, JSON.stringify(draft));
+    } catch {
+      // Setup remains usable when browser storage is unavailable.
+    }
+  }, [deviceType, draftKey, draftReady, location, locationStatus, operatingSystem, operatingSystemVersion, step]);
 
   function verifyLocation() {
     if (!navigator.geolocation) {
@@ -82,6 +139,8 @@ export function SetPasswordForm() {
     setClientError("");
     setStep(3);
   }
+
+  if (!draftReady) return <div className="flex min-h-48 items-center justify-center gap-2 rounded-md border border-border bg-card/25 text-sm text-muted-foreground" role="status"><LoaderCircle className="size-4 animate-spin text-primary" />Restoring account setup...</div>;
 
   return (
     <form action={action} className="space-y-5" noValidate>
