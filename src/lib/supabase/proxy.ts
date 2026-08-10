@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSafeNextPath } from "@/lib/auth/safe-next-path";
 import { getSupabasePublicEnv, isSupabaseConfigured } from "@/lib/supabase/env";
+import { ACTIVE_STUDY_COOKIE, ACTIVE_STUDY_COOKIE_MAX_AGE } from "@/lib/study-context";
 import type { Database } from "@/types/database.types";
 
 function requestedInternalPath(request: NextRequest): string {
@@ -40,6 +41,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return isProtectedPath ? createLoginRedirect(request, "configuration") : NextResponse.next({ request });
   }
 
+  const scopedStudyId = request.nextUrl.pathname.match(/^\/(?:paired-testing-demo\/)?studies\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|$)/i)?.[1];
+  if (scopedStudyId) request.cookies.set(ACTIVE_STUDY_COOKIE, scopedStudyId);
+
   let supabaseResponse = NextResponse.next({ request });
   const { url, publishableKey } = getSupabasePublicEnv();
   const supabase = createServerClient<Database>(url, publishableKey, {
@@ -67,6 +71,16 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   if (!hasVerifiedUser && isProtectedPath) {
     return copySessionCookies(supabaseResponse, createLoginRedirect(request));
+  }
+
+  if (scopedStudyId) {
+    supabaseResponse.cookies.set(ACTIVE_STUDY_COOKIE, scopedStudyId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: ACTIVE_STUDY_COOKIE_MAX_AGE,
+    });
   }
 
   return supabaseResponse;

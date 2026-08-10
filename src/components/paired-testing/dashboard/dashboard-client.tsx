@@ -34,6 +34,7 @@ import type {
   MatchedPairSummary,
 } from "@/lib/data/matched-pairs";
 import type { ActivityLogEvent } from "@/lib/data/activity-logs";
+import type { ReactNode } from "react";
 
 const colors = {
   valid: "#B7FF3C",
@@ -52,6 +53,9 @@ export function DashboardClient({
   pairs,
   reviews,
   recentActivity,
+  scopeSelector,
+  portfolio,
+  viewerMode = false,
 }: {
   study: Study;
   serviceOptions: ProviderServiceOption[];
@@ -59,6 +63,9 @@ export function DashboardClient({
   pairs: MatchedPairSummary[];
   reviews: ExpertReview[];
   recentActivity: ActivityLogEvent[];
+  scopeSelector?: ReactNode;
+  portfolio?: { studyCount: number; targetPairs: number; testingStartsAt: string | null; testingEndsAt: string | null };
+  viewerMode?: boolean;
 }) {
   const latest = new Map<string, ExpertReview>();
   reviews.forEach((review) => {
@@ -74,7 +81,7 @@ export function DashboardClient({
       : review?.status ?? "pending";
   };
   const reviewCount = (status: "pending" | "accepted" | "accepted_with_exception" | "rejected") => pairs.filter((pair) => reviewOutcome(pair) === status).length;
-  const target = study.target_pair_count ?? 0;
+  const target = portfolio?.targetPairs ?? study.target_pair_count ?? 0;
   const acceptedWithException = reviewCount("accepted_with_exception");
   const rejected = reviewCount("rejected");
   const acceptedUsablePairs = pairs.filter((pair) => {
@@ -114,14 +121,14 @@ export function DashboardClient({
     ? (acceptedUsablePairs / decidedReviews) * 100
     : 0;
   const validationData = (
-    ["valid", "warning", "invalid", "incomplete", "pending"] as const
+    viewerMode ? (["valid", "warning", "invalid", "incomplete"] as const) : (["valid", "warning", "invalid", "incomplete", "pending"] as const)
   ).map((status) => ({
     name: status,
     value: technicalCount(status),
     fill: colors[status],
   }));
   const reviewData = (
-    ["accepted", "accepted_with_exception", "rejected", "pending"] as const
+    viewerMode ? (["accepted", "accepted_with_exception", "rejected"] as const) : (["accepted", "accepted_with_exception", "rejected", "pending"] as const)
   ).map((status) => ({
     name: status,
     value: reviewCount(status),
@@ -152,17 +159,20 @@ export function DashboardClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={`${study.study_code} - Study operations`}
-        title="Study Dashboard"
-        description={`${study.name} | ${study.display_timezone} | ${study.default_currency ?? "Currency pending"}`}
+        eyebrow={viewerMode ? "Released results" : portfolio ? "Portfolio analytics" : `${study.study_code} - Study operations`}
+        title={viewerMode ? (portfolio ? "Released Study Analytics" : "Released Study Dashboard") : portfolio ? "All Studies Dashboard" : "Study Dashboard"}
+        description={portfolio ? `Computed from ${portfolio.studyCount} ${viewerMode ? "released" : "accessible"} ${portfolio.studyCount === 1 ? "study" : "studies"} and ${pairs.length} matched ${pairs.length === 1 ? "pair" : "pairs"}.` : `${study.name} | ${study.display_timezone} | ${study.default_currency ?? "Currency pending"}`}
+        actions={scopeSelector}
       />
-      <StudyServiceContext study={study} services={serviceOptions} />
+      {!portfolio ? <StudyServiceContext study={study} services={serviceOptions} /> : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Accepted usable pairs"
-          value={target ? `${acceptedUsablePairs} / ${target}` : acceptedUsablePairs}
+          label={viewerMode ? "Included comparisons" : "Accepted usable pairs"}
+          value={viewerMode ? acceptedUsablePairs : target ? `${acceptedUsablePairs} / ${target}` : acceptedUsablePairs}
           note={
-            target
+            viewerMode
+              ? target ? `${acceptedUsablePairs} of ${target} target comparisons` : "Accepted for reporting"
+              : target
               ? replacementNeeded ? `${replacementNeeded} replacement pair${replacementNeeded === 1 ? "" : "s"} needed` : "Study target reached"
               : "No target configured"
           }
@@ -179,8 +189,8 @@ export function DashboardClient({
           icon={<CheckCircle2 className="size-4" />}
         />
         <MetricCard
-          label="Pending expert review"
-          value={reviewCount("pending")}
+          label={viewerMode ? "Review decisions" : "Pending expert review"}
+          value={viewerMode ? decidedReviews : reviewCount("pending")}
           note={`${reviewCount("accepted")} accepted | ${acceptedWithException} with exception | ${reviewCount("rejected")} rejected`}
           icon={<CircleGauge className="size-4" />}
         />
@@ -220,7 +230,7 @@ export function DashboardClient({
       <section className="grid gap-3 lg:grid-cols-2">
         <Card className="data-panel">
           <CardHeader>
-            <CardTitle className="text-sm">Study progress</CardTitle>
+            <CardTitle className="text-sm">{portfolio ? "Portfolio progress" : "Study progress"}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end justify-between">
@@ -237,14 +247,14 @@ export function DashboardClient({
               <div>
                 <dt className="text-muted-foreground">Testing period</dt>
                 <dd className="mt-1 font-medium">
-                  {date(study.testing_starts_at)} -{" "}
-                  {date(study.testing_ends_at)}
+                  {date(portfolio?.testingStartsAt ?? study.testing_starts_at)} -{" "}
+                  {date(portfolio?.testingEndsAt ?? study.testing_ends_at)}
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Study status</dt>
+                <dt className="text-muted-foreground">{portfolio ? "Studies included" : "Study status"}</dt>
                 <dd className="mt-1">
-                  <StatusBadge status={study.status} />
+                  {portfolio ? <span className="text-sm font-semibold">{portfolio.studyCount}</span> : <StatusBadge status={study.status} />}
                 </dd>
               </div>
             </dl>
@@ -262,13 +272,13 @@ export function DashboardClient({
           type="bar"
         />
       </section>
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className={viewerMode ? "grid gap-3" : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]"}>
         <div className="overflow-hidden rounded-md border border-border">
           <div className="flex items-center justify-between border-b border-border bg-card/35 px-4 py-3">
             <div>
-              <p className="text-[10px] uppercase text-primary">Review queue</p>
+              <p className="text-[10px] uppercase text-primary">{viewerMode ? "Released results" : "Review queue"}</p>
               <h2 className="mt-1 text-base font-semibold">
-                Recent matched pairs
+                {viewerMode ? "Included matched pairs" : "Recent matched pairs"}
               </h2>
             </div>
             <Button asChild variant="ghost" size="sm">
@@ -303,7 +313,7 @@ export function DashboardClient({
             ) : null}
           </div>
         </div>
-        <aside className="overflow-hidden rounded-md border border-border">
+        {!viewerMode ? <aside className="overflow-hidden rounded-md border border-border">
           <div className="border-b border-border bg-card/35 px-4 py-3">
             <p className="text-[10px] uppercase text-primary">
               Operational history
@@ -332,7 +342,7 @@ export function DashboardClient({
               </p>
             ) : null}
           </div>
-        </aside>
+        </aside> : null}
       </section>
     </div>
   );
@@ -345,6 +355,9 @@ const tooltipStyle = {
   color: "#F5F7F6",
   fontSize: 11,
 };
+
+const chartLabel = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 function Chart({
   title,
   data,
@@ -359,10 +372,10 @@ function Chart({
   return (
     <Card className="data-panel">
       <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
+        <CardTitle className="text-sm font-semibold text-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[220px]">
+        <div className="h-[240px]">
           {" "}
           <ResponsiveContainer width="100%" height="100%">
             {type === "pie" ? (
@@ -380,28 +393,31 @@ function Chart({
                     <Cell key={item.name} fill={item.fill} />
                   ))}
                 </Pie>
-                <ChartTooltip contentStyle={tooltipStyle} />
+                <ChartTooltip contentStyle={tooltipStyle} labelStyle={{ color: "#F5F7F6" }} formatter={(value, name) => [value, chartLabel(String(name))]} />
               </PieChart>
             ) : (
               <BarChart data={data} margin={{ left: -25 }}>
-                <CartesianGrid stroke="#26372F" vertical={false} />
+                <CartesianGrid stroke="#334A3F" strokeOpacity={0.75} vertical={false} />
                 <XAxis
                   dataKey="name"
-                  tick={{ fill: "#9AABA2", fontSize: 10 }}
+                  tick={{ fill: "#C2CEC7", fontSize: 11 }}
+                  tickFormatter={chartLabel}
+                  height={38}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fill: "#9AABA2", fontSize: 10 }}
+                  tick={{ fill: "#C2CEC7", fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
-                <ChartTooltip contentStyle={tooltipStyle} />
+                <ChartTooltip cursor={{ fill: "#B7FF3C", fillOpacity: 0.055 }} contentStyle={tooltipStyle} labelStyle={{ color: "#F5F7F6" }} labelFormatter={(label) => chartLabel(String(label))} />
                 <Bar
                   dataKey="value"
                   radius={[4, 4, 0, 0]}
                   isAnimationActive={false}
+                  minPointSize={2}
                 >
                   {data.map((item) => (
                     <Cell key={item.name} fill={item.fill} />
@@ -411,7 +427,7 @@ function Chart({
             )}
           </ResponsiveContainer>
         </div>
-        {showLegend ? <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-3 text-[10px] text-muted-foreground sm:grid-cols-3">{data.map((item) => <div key={item.name} className="flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ backgroundColor: item.fill }} /><span className="capitalize">{item.name}</span><strong className="ml-auto text-foreground">{item.value}</strong></div>)}</div> : null}
+        {showLegend ? <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-[11px] text-muted-foreground sm:grid-cols-3">{data.map((item) => <div key={item.name} className="flex items-center gap-2"><span className="size-2 rounded-full" style={{ backgroundColor: item.fill }} /><span>{chartLabel(item.name)}</span><strong className="ml-auto text-foreground">{item.value}</strong></div>)}</div> : null}
       </CardContent>
     </Card>
   );

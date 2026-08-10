@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { Archive, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Pencil, Play, Plus, Search, Trash2, Users } from "lucide-react";
+import { Archive, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Pencil, Play, Plus, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { createStudyAction, deleteDraftStudyAction, extendStudyTestingPeriodAction, selectStudyAction, transitionStudyStatusAction, updateFullDraftStudyAction } from "@/app/paired-testing-demo/studies/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,6 +25,7 @@ import type { ProviderServiceOption, Study, StudyCompletionReadiness, StudyEdito
 import type { AppRole } from "@/lib/data/profiles";
 
 type DraftPoint = GeocodingResult & { label: string; isPublicLocation: boolean };
+const creationDraftKey = "paired-testing-lab:create-study-draft:v1";
 const stepLabels = ["Study design", "Initial route", "Test conditions", "Schedule & review"];
 const stepDescriptions = [
   "Define the question and target",
@@ -80,6 +81,63 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
   const [testingSynchronization, setTestingSynchronization] = useState<"synchronized" | "asynchronous">(initialConfiguration.testing_synchronization === "asynchronous" ? "asynchronous" : "synchronized");
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
+  const [draftReady, setDraftReady] = useState(Boolean(initialData));
+
+  /* eslint-disable react-hooks/set-state-in-effect -- Restore the browser-only draft after hydration. */
+  useEffect(() => {
+    if (initialData) return;
+    try {
+      const stored = window.localStorage.getItem(creationDraftKey);
+      if (stored) {
+        const draft = JSON.parse(stored) as Record<string, unknown>;
+        if (typeof draft.step === "number") setStep(Math.min(Math.max(draft.step, 0), 3));
+        if (typeof draft.name === "string") setName(draft.name);
+        if (draft.studyType === "within_platform_pair" || draft.studyType === "cross_platform_comparison") setStudyType(draft.studyType);
+        if (draft.withinComparisonDesign === "same_tier" || draft.withinComparisonDesign === "different_tier") setWithinComparisonDesign(draft.withinComparisonDesign);
+        if (typeof draft.studyQuestion === "string") setStudyQuestion(draft.studyQuestion);
+        if (typeof draft.isolatedVariable === "string") setIsolatedVariable(draft.isolatedVariable);
+        if (typeof draft.targetPairCount === "string") setTargetPairCount(draft.targetPairCount);
+        if (draft.searchCountry === "PH" || draft.searchCountry === "US" || draft.searchCountry === "CA") setSearchCountry(draft.searchCountry);
+        if (typeof draft.testingStartsAt === "string") setTestingStartsAt(draft.testingStartsAt);
+        if (typeof draft.testingEndsAt === "string") setTestingEndsAt(draft.testingEndsAt);
+        if (typeof draft.routeName === "string") setRouteName(draft.routeName);
+        if (typeof draft.pickupInstructions === "string") setPickupInstructions(draft.pickupInstructions);
+        if (typeof draft.destinationInstructions === "string") setDestinationInstructions(draft.destinationInstructions);
+        if (typeof draft.routeNotes === "string") setRouteNotes(draft.routeNotes);
+        if (draft.activeMode === "pickup" || draft.activeMode === "destination") setActiveMode(draft.activeMode);
+        if (draft.locationEntryMode === "search" || draft.locationEntryMode === "coordinates") setLocationEntryMode(draft.locationEntryMode);
+        if (draft.pickup && typeof draft.pickup === "object") setPickup(draft.pickup as DraftPoint);
+        if (draft.destination && typeof draft.destination === "object") setDestination(draft.destination as DraftPoint);
+        if (typeof draft.searchQuery === "string") setSearchQuery(draft.searchQuery);
+        if (Array.isArray(draft.selectedPlatformIds)) setSelectedPlatformIds(draft.selectedPlatformIds.filter((value): value is string => typeof value === "string"));
+        if (typeof draft.testerAServiceId === "string") setTesterAServiceId(draft.testerAServiceId);
+        if (typeof draft.testerBServiceId === "string") setTesterBServiceId(draft.testerBServiceId);
+        if (typeof draft.deviceRestrictionEnabled === "boolean") setDeviceRestrictionEnabled(draft.deviceRestrictionEnabled);
+        if (draft.deviceComparisonDesign === "same_operating_system" || draft.deviceComparisonDesign === "different_operating_system") setDeviceComparisonDesign(draft.deviceComparisonDesign);
+        if (draft.testerAOperatingSystem === "iOS" || draft.testerAOperatingSystem === "Android") setTesterAOperatingSystem(draft.testerAOperatingSystem);
+        if (draft.testerBOperatingSystem === "iOS" || draft.testerBOperatingSystem === "Android") setTesterBOperatingSystem(draft.testerBOperatingSystem);
+        if (draft.testingSynchronization === "synchronized" || draft.testingSynchronization === "asynchronous") setTestingSynchronization(draft.testingSynchronization);
+        if (typeof draft.customLatitude === "string") setCustomLatitude(draft.customLatitude);
+        if (typeof draft.customLongitude === "string") setCustomLongitude(draft.customLongitude);
+      }
+    } catch {
+      window.localStorage.removeItem(creationDraftKey);
+    } finally {
+      setDraftReady(true);
+    }
+  }, [initialData]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (initialData || !draftReady) return;
+    window.localStorage.setItem(creationDraftKey, JSON.stringify({
+      step, name, studyType, withinComparisonDesign, studyQuestion, isolatedVariable, targetPairCount,
+      searchCountry, testingStartsAt, testingEndsAt, routeName, pickupInstructions, destinationInstructions,
+      routeNotes, activeMode, locationEntryMode, pickup, destination, searchQuery, selectedPlatformIds,
+      testerAServiceId, testerBServiceId, deviceRestrictionEnabled, deviceComparisonDesign,
+      testerAOperatingSystem, testerBOperatingSystem, testingSynchronization, customLatitude, customLongitude,
+    }));
+  }, [activeMode, customLatitude, customLongitude, destination, destinationInstructions, deviceComparisonDesign, deviceRestrictionEnabled, draftReady, initialData, isolatedVariable, locationEntryMode, name, pickup, pickupInstructions, routeName, routeNotes, searchCountry, searchQuery, selectedPlatformIds, step, studyQuestion, studyType, targetPairCount, testerAOperatingSystem, testerAServiceId, testerBOperatingSystem, testerBServiceId, testingEndsAt, testingStartsAt, testingSynchronization, withinComparisonDesign]);
 
   const marketProviders = useMemo(() => providerOptions.filter((option) => option.countryCode === (pickup?.countryCode ?? searchCountry)), [pickup, providerOptions, searchCountry]);
   const selectedServices = useMemo(() => [...new Set([testerAServiceId, testerBServiceId].filter(Boolean))], [testerAServiceId, testerBServiceId]);
@@ -400,6 +458,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
       };
       const result = initialData ? await updateFullDraftStudyAction(initialData.study.id, payload) : await createStudyAction(payload);
       if (result.ok) {
+        if (!initialData) window.localStorage.removeItem(creationDraftKey);
         toast.success(result.message);
         if (initialData) {
           router.push("/paired-testing-demo/studies");
@@ -465,11 +524,10 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
 
               <div className="space-y-3"><Label>Entry method</Label><div className="grid grid-cols-2 rounded-md border border-border p-1"><Button type="button" size="sm" variant={locationEntryMode === "search" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("search")}><Search className="size-4" />Search</Button><Button type="button" size="sm" variant={locationEntryMode === "coordinates" ? "secondary" : "ghost"} onClick={() => setLocationEntryMode("coordinates")}><LocateFixed className="size-4" />Coordinates</Button></div><Button type="button" className="w-full" variant="outline" onClick={useCurrentLocation} disabled={locating || resolving}>{locating ? <LoaderCircle className="size-4 animate-spin" /> : <LocateFixed className="size-4" />}{locating ? "Locating..." : `Use current location for ${activeMode}`}</Button></div>
 
-              {locationEntryMode === "search" ? <div className="space-y-2"><Label htmlFor="route-location-search">Search {activeMode}</Label><div className="flex gap-2"><Input id="route-location-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} placeholder={`Search in ${{ PH: "the Philippines", US: "the United States", CA: "Canada" }[searchCountry]}`} /><Button type="button" size="icon" variant="outline" aria-label={`Search ${activeMode}`} title={`Search ${activeMode}`} onClick={() => void search()} disabled={searching || searchQuery.trim().length < 3}>{searching ? <LoaderCircle className="size-4 animate-spin" /> : <Search className="size-4" />}</Button></div></div> : null}
+              {locationEntryMode === "search" ? <div className="relative z-20 space-y-2"><Label htmlFor="route-location-search">Search {activeMode}</Label><div className="flex gap-2"><Input id="route-location-search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} placeholder={`Search in ${{ PH: "the Philippines", US: "the United States", CA: "Canada" }[searchCountry]}`} /><Button type="button" size="icon" variant="outline" aria-label={`Search ${activeMode}`} title={`Search ${activeMode}`} onClick={() => void search()} disabled={searching || searchQuery.trim().length < 3}>{searching ? <LoaderCircle className="size-4 animate-spin" /> : <Search className="size-4" />}</Button></div>{searchResults.length ? <div className="absolute left-0 right-0 top-full mt-2 max-h-64 divide-y divide-border overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-xl"><p className="sticky top-0 bg-popover px-2 py-2 text-[9px] font-medium uppercase text-muted-foreground">Search results</p>{searchResults.map((result) => <button type="button" key={`${result.externalPlaceId}-${result.latitude}`} onClick={() => assignPoint(result)} className="flex w-full items-start gap-3 rounded-sm px-2 py-3 text-left text-xs hover:bg-secondary"><MapPin className="mt-0.5 size-4 shrink-0 text-primary" /><span className="leading-5">{result.formattedAddress}</span></button>)}</div> : null}</div> : null}
 
               {locationEntryMode === "coordinates" ? <div className="space-y-3"><div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="custom-latitude">Latitude</Label><Input id="custom-latitude" inputMode="decimal" value={customLatitude} onChange={(event) => setCustomLatitude(event.target.value)} placeholder="14.5995" /></div><div className="space-y-2"><Label htmlFor="custom-longitude">Longitude</Label><Input id="custom-longitude" inputMode="decimal" value={customLongitude} onChange={(event) => setCustomLongitude(event.target.value)} placeholder="120.9842" /></div></div><Button type="button" variant="outline" className="w-full" onClick={applyCustomCoordinates} disabled={resolving}><LocateFixed className="size-4" />Set {activeMode} coordinates</Button><FieldError message={errors.coordinates} /></div> : null}
 
-              {searchResults.length ? <div className="space-y-2"><p className="text-[10px] font-medium uppercase text-muted-foreground">Search results</p><div className="max-h-56 divide-y divide-border overflow-y-auto border-y border-border">{searchResults.map((result) => <button type="button" key={`${result.externalPlaceId}-${result.latitude}`} onClick={() => assignPoint(result)} className="flex w-full items-start gap-3 px-1 py-3 text-left text-xs hover:bg-secondary/50"><MapPin className="mt-0.5 size-4 shrink-0 text-primary" /><span className="leading-5">{result.formattedAddress}</span></button>)}</div></div> : null}
             </section>
 
             <div className="relative min-w-0"><StudyRouteMap countryCode={searchCountry} activeMode={activeMode} pickup={pickup} destination={destination} onCoordinatesChange={(mode, lat, lng) => void resolveCoordinates(mode, lat, lng)} /><span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-xs font-medium capitalize shadow-sm">{activeMode === "pickup" ? <MapPin className="size-3.5 text-primary" /> : <MapPin className="size-3.5 text-amber-500" />}Setting {activeMode}</span><span className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border bg-background/90 px-2.5 py-1.5 text-[10px] text-muted-foreground shadow-sm">Click the map or drag a pin</span>{resolving ? <span className="absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-background/90 px-2.5 py-1.5 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />Resolving location</span> : null}</div>
@@ -660,7 +718,7 @@ function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive,
   return <div className="space-y-4"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{summary.map((item) => <div key={item.label} className="rounded-md border border-border bg-secondary/15 px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">{item.label}</p><p className="mt-1 text-xl font-semibold">{item.value}</p></div>)}</div><div className="flex flex-col gap-3 border-y border-border py-3 sm:flex-row sm:items-center sm:justify-between"><div className="relative w-full sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, code, provider, or tier" className="pl-9" /></div><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div><div className="overflow-x-auto rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{filteredStudies.map((study) => {
     const serviceLabel = configuredStudyServices(study, providerOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
     const canManageDraft = study.status === "draft" && !activeProtocolStudyIds.includes(study.id);
-    return <TableRow key={study.id} className={study.id === activeStudyId ? "bg-primary/[0.035]" : undefined}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{study.name}</p>{study.id === activeStudyId ? <Badge variant="outline">Current workspace</Badge> : null}</div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-80"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "default"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select study"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
+    return <TableRow key={study.id} className={study.id === activeStudyId ? "bg-primary/[0.035]" : undefined}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><Link href={`/studies/${study.id}`} className="font-medium hover:text-primary hover:underline">{study.name}</Link>{study.id === activeStudyId ? <Badge variant="outline">Current workspace</Badge> : null}</div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-80"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/studies/${study.id}`}><ArrowRight className="size-3.5" />Open</Link></Button><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" variant={study.id === activeStudyId ? "secondary" : "default"} disabled={study.id === activeStudyId || pendingId === study.id} onClick={() => select(study)}>{pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : study.id === activeStudyId ? <Check className="size-4" /> : null}{study.id === activeStudyId ? "Selected" : "Select study"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
   })}{!filteredStudies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies match the current filters.</TableCell></TableRow> : null}</TableBody></Table></div><p className="text-xs text-muted-foreground">Showing {filteredStudies.length} of {studies.length} studies</p></div>;
 }
 

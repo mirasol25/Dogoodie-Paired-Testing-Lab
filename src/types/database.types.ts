@@ -1448,7 +1448,7 @@ export type Database = {
         }[]
       }
       list_activity_log_filter_options: {
-        Args: { p_study_id: string }
+        Args: { p_category?: string | null; p_study_id: string }
         Returns: Json
       }
       add_study_member: {
@@ -1554,6 +1554,7 @@ export type Database = {
           assignment_id: string
           display_name: string | null
           email: string | null
+          protocol_value: string | null
           slot: Database["public"]["Enums"]["tester_slot"]
           slot_status: Database["public"]["Enums"]["assignment_tester_status"]
           user_id: string

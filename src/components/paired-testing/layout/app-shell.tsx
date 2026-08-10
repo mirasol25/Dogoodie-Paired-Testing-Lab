@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  Activity, ClipboardCheck, Columns2, FileArchive, FileText, History,
-  ChevronRight, Home, LayoutDashboard, LogOut, Menu, UserRoundCog, Users,
+  Activity, BookOpen, ClipboardCheck, Columns2, FileArchive, FileText, History,
+  Home, LayoutDashboard, LogOut, Menu, UserRoundCog, Users,
 } from "lucide-react";
 import { signOutAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,47 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { demoConfig } from "@/config/paired-testing-demo.config";
 import { cn } from "@/lib/utils";
 import type { NavigationItem } from "@/types/paired-testing-demo.types";
+import { DashboardScopeSelector } from "@/components/paired-testing/dashboard/dashboard-scope-selector";
 
-const icons = { Activity, ClipboardCheck, Columns2, FileArchive, FileText, History, Home, LayoutDashboard, Users };
+const icons = { Activity, BookOpen, ClipboardCheck, Columns2, FileArchive, FileText, History, Home, LayoutDashboard, Users };
+
+function NavigationIndicator() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [pendingDestination, setPendingDestination] = useState<string | null>(null);
+  const currentLocation = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  const pending = pendingDestination !== null && pendingDestination !== currentLocation;
+
+  useEffect(() => {
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+    const beginNavigation = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest("a[href]");
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin) return;
+      if (`${destination.pathname}${destination.search}` === `${window.location.pathname}${window.location.search}`) return;
+      setPendingDestination(`${destination.pathname}${destination.search}`);
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => setPendingDestination(null), 10000);
+    };
+    document.addEventListener("click", beginNavigation, true);
+    return () => {
+      document.removeEventListener("click", beginNavigation, true);
+      clearTimeout(resetTimer);
+    };
+  }, []);
+
+  if (!pending) return null;
+  return (
+    <div className="no-print pointer-events-none fixed inset-x-0 top-0 z-[100] h-[3px] overflow-hidden bg-primary/10" role="status" aria-live="polite">
+      <div className="route-progress-bar h-full w-2/5 bg-primary shadow-[0_0_10px_rgba(183,255,60,0.75)]" />
+      <span className="sr-only">Loading the requested page</span>
+    </div>
+  );
+}
 
 export interface AppShellUser {
   email: string;
@@ -42,6 +82,22 @@ const roleLabels: Record<AppShellUser["role"], string> = {
   expert_reviewer: "Expert Reviewer",
   law_firm_viewer: "Law-Firm Viewer",
 };
+
+const studyNavigation: Record<AppShellUser["role"], NavigationItem> = {
+  admin: { label: "Study Management", href: "/studies", icon: "BookOpen" },
+  test_coordinator: { label: "Study Management", href: "/studies", icon: "BookOpen" },
+  tester: { label: "Assigned Studies", href: "/tester-studies", icon: "BookOpen" },
+  expert_reviewer: { label: "Review Studies", href: "/review-studies", icon: "BookOpen" },
+  law_firm_viewer: { label: "Released Studies", href: "/view-studies", icon: "BookOpen" },
+};
+
+function navigationForRole(role: AppShellUser["role"]): NavigationItem[] {
+  if (role === "tester") return [studyNavigation[role]];
+  const systemItems = ["/dashboard", "/audit", "/reports"].map((href) =>
+    demoConfig.navigation.find((item) => item.href === href),
+  ).filter((item): item is NavigationItem => Boolean(item));
+  return [systemItems[0], studyNavigation[role], ...systemItems.slice(1)];
+}
 
 function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?: boolean }) {
   return (
@@ -83,18 +139,7 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
 
 function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const allowedPaths: Partial<Record<AppShellUser["role"], string[]>> = {
-    tester: ["/", "/assignments"],
-    expert_reviewer: [
-      "/", "/dashboard", "/protocol", "/pairs", "/evidence", "/audit", "/reports",
-    ],
-    law_firm_viewer: [
-      "/", "/dashboard", "/protocol", "/pairs", "/evidence", "/audit", "/reports",
-    ],
-  };
-  const items = allowedPaths[role]
-    ? demoConfig.navigation.filter((item) => allowedPaths[role]?.includes(item.href))
-    : demoConfig.navigation;
+  const items = navigationForRole(role);
   return (
     <nav aria-label="Primary navigation" className="space-y-1">
       {items.map((item: NavigationItem) => {
@@ -109,7 +154,7 @@ function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNaviga
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "group flex min-h-9 items-center gap-3 rounded-md border border-transparent px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+              "group flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
               active && "border-primary/15 bg-primary/[0.085] text-primary",
             )}
           >
@@ -122,9 +167,10 @@ function Navigation({ role, onNavigate }: { role: AppShellUser["role"]; onNaviga
   );
 }
 
-function Brand() {
+function Brand({ role }: { role: AppShellUser["role"] }) {
+  const homeHref = role === "tester" ? "/tester-studies" : "/dashboard";
   return (
-    <Link href="/" className="flex items-center gap-3 rounded-md">
+    <Link href={homeHref} className="flex items-center gap-3 rounded-md" aria-label="Go to your home page">
       <span className="relative size-9 shrink-0 overflow-hidden rounded-lg border border-primary/30 bg-black shadow-sm shadow-primary/15">
         <Image src="/icon.png" alt="" fill sizes="36px" className="object-cover" priority />
       </span>
@@ -136,24 +182,32 @@ function Brand() {
   );
 }
 
-export function AppShell({ children, user, activeStudy }: { children: React.ReactNode; user: AppShellUser; activeStudy: AppShellStudy | null }) {
+export function CurrentStudySummary({ activeStudy }: { activeStudy: AppShellStudy | null }) {
+  return (
+    <section aria-label="Current study" className="mt-6 rounded-md border border-border/80 bg-secondary/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Current study</span>
+        <span className="mono truncate text-[10px] text-primary">{activeStudy?.code ?? "NONE SELECTED"}</span>
+      </div>
+      <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">{activeStudy?.name ?? "No study selected"}</p>
+      {activeStudy ? <p className="mt-1 text-[10px] capitalize leading-4 text-muted-foreground">{activeStudy.status} · {activeStudy.currency ?? "Currency pending"}</p> : null}
+      {activeStudy?.serviceLabel ? <p className="mt-2 truncate text-[10px] font-medium text-primary" title={activeStudy.serviceLabel}>{activeStudy.serviceLabel}</p> : null}
+    </section>
+  );
+}
+
+export function AppShell({ children, user, dashboardStudies = [] }: { children: React.ReactNode; user: AppShellUser; dashboardStudies?: Array<{ id: string; code: string; name: string }> }) {
   const pathname = usePathname();
-  const current = demoConfig.navigation.find((item) =>
+  const searchParams = useSearchParams();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const current = navigationForRole(user.role).find((item) =>
     item.href === "/" ? pathname === item.href : pathname.startsWith(item.href));
   return (
     <div className="min-h-screen">
+      <NavigationIndicator />
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border/80 bg-[#08120e]/95 p-4 backdrop-blur-xl lg:flex lg:flex-col">
-        <Brand />
-        <Link href={user.role === "tester" ? "/tester-studies" : user.role === "expert_reviewer" ? "/review-studies" : user.role === "law_firm_viewer" ? "/view-studies" : "/studies"} className="group mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3 transition-colors hover:border-primary/35 hover:bg-secondary/65">
-          <div className="flex items-center justify-between gap-2">
-            <span className="mono truncate text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span>
-            <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-          </div>
-          <p className="mt-2 line-clamp-2 text-xs font-medium leading-5 text-foreground">{activeStudy?.name ?? (user.role === "law_firm_viewer" ? "No finalized study available" : "Select or create a study")}</p>
-          <p className="mt-1 text-[10px] capitalize leading-4 text-muted-foreground">{activeStudy ? `${activeStudy.status} · ${activeStudy.currency ?? "Currency pending"}` : user.role === "law_firm_viewer" ? "Completed or archived studies only" : "Study management"}</p>
-          {activeStudy?.serviceLabel ? <p className="mt-2 truncate text-[10px] font-medium text-primary" title={activeStudy.serviceLabel}>{activeStudy.serviceLabel}</p> : null}
-        </Link>
-        <div className={cn("flex-1 overflow-y-auto", user.role === "tester" ? "mt-8" : "mt-5")}><Navigation role={user.role} /></div>
+        <Brand role={user.role} />
+        <div className="mt-8 flex-1 overflow-y-auto"><Navigation role={user.role} /></div>
         <div className="space-y-3 border-t border-border/70 pt-4">
           <AccountPanel user={user} />
           <div className="flex items-center justify-between px-2 text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -163,37 +217,30 @@ export function AppShell({ children, user, activeStudy }: { children: React.Reac
       </aside>
 
       <div className="lg:pl-64">
-        <header role="banner" className="no-print sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border/80 bg-background/88 px-4 backdrop-blur-xl sm:px-6">
-          <div className="flex items-center gap-3">
-            <Sheet>
+        <header role="banner" className="no-print sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b border-border/80 bg-background/88 px-3 backdrop-blur-xl sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="lg:hidden"><Menu className="size-4" /><span className="sr-only">Open navigation</span></Button>
+                <Button variant="outline" size="icon" className="size-11 shrink-0 lg:hidden"><Menu className="size-5" /><span className="sr-only">Open navigation</span></Button>
               </SheetTrigger>
-              <SheetContent side="left" className="!h-dvh w-[290px] gap-0 overflow-hidden p-0">
-                <SheetHeader className="shrink-0 px-4 pb-0 pt-4"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <Brand />
-                {["admin", "test_coordinator"].includes(user.role) ? <Link href="/paired-testing-demo/studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select or create a study"}</span>{activeStudy ? <span className="mt-1 block text-[10px] capitalize text-muted-foreground">{activeStudy.status} · {activeStudy.currency ?? "Currency pending"}</span> : <span className="mt-1 block text-[10px] text-muted-foreground">Study management</span>}{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
-                {user.role === "tester" ? <Link href="/paired-testing-demo/tester-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
-                {user.role === "expert_reviewer" ? <Link href="/paired-testing-demo/review-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "Select an assigned study"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
-                {user.role === "law_firm_viewer" ? <Link href="/paired-testing-demo/view-studies" className="mt-6 block rounded-md border border-border/80 bg-secondary/40 p-3"><span className="mono text-[10px] text-primary">{activeStudy?.code ?? "NO STUDY"}</span><span className="mt-2 block text-xs font-medium">{activeStudy?.name ?? "No finalized study available"}</span>{activeStudy?.serviceLabel ? <span className="mt-2 block truncate text-[10px] font-medium text-primary">{activeStudy.serviceLabel}</span> : null}</Link> : null}
-                <div className="mt-6"><Navigation role={user.role} /></div>
-                <div className="mt-6 border-t border-border pt-5"><AccountPanel user={user} /></div>
+              <SheetContent side="left" className="!h-dvh w-[min(88vw,320px)] gap-0 overflow-hidden p-0">
+                <SheetHeader className="shrink-0 px-4 pb-0 pt-[max(1rem,env(safe-area-inset-top))]"><SheetTitle className="sr-only">Application navigation</SheetTitle></SheetHeader>
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                  <Brand role={user.role} />
+                  <div className="mt-6"><Navigation role={user.role} onNavigate={() => setMobileNavOpen(false)} /></div>
+                  <div className="mt-auto border-t border-border pt-5"><AccountPanel user={user} /></div>
                 </div>
               </SheetContent>
             </Sheet>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{activeStudy?.code ?? "No study selected"}</p>
-              <p className="text-sm font-medium text-foreground">{current?.label ?? "Matched Pair Review"}</p>
-            </div>
+            {pathname === "/dashboard" ? <DashboardScopeSelector studies={dashboardStudies} selectedId={searchParams.get("study") ?? undefined} compact /> : <p className="truncate text-sm font-medium text-foreground">{current?.label ?? "Matched Pair Review"}</p>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <span className="hidden rounded-md border border-teal-300/20 bg-teal-300/[0.06] px-2.5 py-1 text-[10px] font-medium text-teal-200 sm:inline-flex">Internal pilot</span>
             <span className="hidden max-w-52 truncate text-[11px] text-muted-foreground xl:inline">{user.displayName || user.email} · {roleLabels[user.role]}</span>
             <AccountPanel user={user} compact />
           </div>
         </header>
-        <main id="main-content" className="box-border min-w-0 w-full max-w-[1600px] overflow-x-hidden p-4 sm:p-6 lg:mx-auto lg:p-7">
+        <main id="main-content" className="box-border min-w-0 w-full max-w-[1600px] overflow-x-hidden px-3 py-4 sm:p-6 lg:mx-auto lg:p-7">
           {children}
         </main>
       </div>

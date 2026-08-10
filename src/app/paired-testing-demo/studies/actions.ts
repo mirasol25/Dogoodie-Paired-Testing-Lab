@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireRole } from "@/lib/auth/server";
-import { ACTIVE_STUDY_COOKIE } from "@/lib/data/active-study";
+import { ACTIVE_STUDY_COOKIE, ACTIVE_STUDY_COOKIE_MAX_AGE } from "@/lib/study-context";
 import { createStudyWithInitialRoute, deleteStudyBeforeProtocolActivation, extendStudyTestingPeriod, getAccessibleStudyById, StudyDataError, transitionStudyStatus, updateFullDraftStudy, updateStudyBeforeProtocolActivation } from "@/lib/data/studies";
 
 export interface StudyActionResult {
@@ -21,7 +21,7 @@ export async function createStudyAction(input: unknown): Promise<StudyActionResu
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 24 * 90,
+      maxAge: ACTIVE_STUDY_COOKIE_MAX_AGE,
     });
     revalidatePath("/paired-testing-demo", "layout");
     return { ok: true, message: `${study.name} was created.`, studyId: study.id };
@@ -40,7 +40,7 @@ export async function selectStudyAction(studyId: string): Promise<StudyActionRes
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 90,
+    maxAge: ACTIVE_STUDY_COOKIE_MAX_AGE,
   });
   revalidatePath("/paired-testing-demo", "layout");
   return { ok: true, message: `${study.name} is now active.`, studyId: study.id };

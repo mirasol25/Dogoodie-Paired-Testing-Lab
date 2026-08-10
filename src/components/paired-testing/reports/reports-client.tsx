@@ -409,7 +409,7 @@ export function ReportsClient({
         description="Generate descriptive exports from persisted study, validation, evidence, review, and activity records."
         actions={
           <Button asChild>
-            <Link href="/paired-testing-demo/reports/print">
+            <Link href={`/reports/print?studyId=${study.id}`}>
               <Printer className="size-4" />
               Print report
             </Link>
@@ -566,7 +566,7 @@ export function ReportsClient({
             </Button>
           ))}
           <Button asChild variant="outline" className="justify-start">
-            <Link href="/paired-testing-demo/reports/print">
+            <Link href={`/reports/print?studyId=${study.id}`}>
               <Printer className="size-4" />
               Preview Summary Report
             </Link>

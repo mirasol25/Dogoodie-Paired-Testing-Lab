@@ -257,7 +257,7 @@ export async function listStudyAssignments(
           status: entry.slot_status,
           serviceName: slot?.platform_service_id ? services.get(slot.platform_service_id)?.name ?? null : null,
           platformName: slot?.platform_service_id ? platforms.get(services.get(slot.platform_service_id)?.platform_id ?? "") ?? null : null,
-          protocolValue: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.protocol_value === "string" ? slot.account_configuration.protocol_value : null,
+          protocolValue: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.protocol_value === "string" ? slot.account_configuration.protocol_value : entry.protocol_value,
           scheduledStart: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.scheduled_start === "string" ? slot.account_configuration.scheduled_start : assignment.scheduled_start,
           scheduledEnd: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.scheduled_end === "string" ? slot.account_configuration.scheduled_end : assignment.scheduled_end,
           testingSynchronization: slot?.account_configuration && typeof slot.account_configuration === "object" && !Array.isArray(slot.account_configuration) && typeof slot.account_configuration.testing_synchronization === "string" ? slot.account_configuration.testing_synchronization : "synchronized",

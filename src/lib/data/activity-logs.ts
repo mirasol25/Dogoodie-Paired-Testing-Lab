@@ -15,9 +15,9 @@ export async function listActivityLogFeed(studyId: string, filters: ActivityLogF
   return { events: data, total: Number(data[0]?.total_count ?? 0), page, pageSize };
 }
 
-export async function listActivityLogFilterOptions(studyId: string): Promise<ActivityLogFilterOptions> {
+export async function listActivityLogFilterOptions(studyId: string, category?: string): Promise<ActivityLogFilterOptions> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("list_activity_log_filter_options", { p_study_id: studyId });
+  const { data, error } = await supabase.rpc("list_activity_log_filter_options", { p_study_id: studyId, p_category: category || null });
   if (error) throw new Error(error.message || "Activity filters could not be loaded.");
   if (!data || typeof data !== "object" || Array.isArray(data)) return { actors: [], actions: [], targetTypes: [] };
   const actors = Array.isArray(data.actors) ? data.actors.flatMap((actor) => actor && typeof actor === "object" && !Array.isArray(actor) && typeof actor.id === "string" && typeof actor.label === "string" ? [{ id: actor.id, label: actor.label }] : []) : [];

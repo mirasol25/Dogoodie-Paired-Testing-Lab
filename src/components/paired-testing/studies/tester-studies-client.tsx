@@ -15,7 +15,7 @@ interface TesterStudyRow {
   workload: { assigned: number; needsAction: number; submitted: number };
 }
 
-const rowGrid = "lg:grid-cols-[minmax(230px,1.25fr)_minmax(180px,.7fr)_minmax(220px,.9fr)_minmax(230px,.85fr)_132px]";
+const rowGrid = "xl:grid-cols-[minmax(260px,1.25fr)_minmax(150px,.7fr)_minmax(190px,.9fr)_minmax(220px,.85fr)_132px]";
 
 function formatDate(value: string | null, timezone: string) {
   return value ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: timezone }).format(new Date(value)) : "Not set";
@@ -33,7 +33,7 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
 
   function open(study: Study) {
     if (study.id === activeStudyId) {
-      router.push("/paired-testing-demo");
+      router.push(`/studies/${study.id}`);
       return;
     }
     setPendingId(study.id);
@@ -45,7 +45,7 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
         return;
       }
       toast.success(result.message);
-      router.push("/paired-testing-demo");
+      router.push(`/studies/${study.id}`);
       router.refresh();
     });
   }
@@ -58,7 +58,7 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search study name or code" className="pl-9" />
         </div>
       </div>
-      <div className={`hidden border-b border-border bg-secondary/25 px-5 py-3 lg:grid ${rowGrid}`}>
+      <div className={`hidden border-b border-border bg-secondary/25 px-5 py-3 xl:grid ${rowGrid}`}>
         <ColumnHeader>Study</ColumnHeader>
         <ColumnHeader>Status</ColumnHeader>
         <ColumnHeader>Testing period</ColumnHeader>
@@ -68,37 +68,38 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
       <div className="divide-y divide-border">
         {visible.map(({ study, workload }) => {
           const selected = study.id === activeStudyId;
+          const actionLabel = ["completed", "archived"].includes(study.status) ? "View history" : "Open study";
           return (
             <article key={study.id} className={selected ? "bg-primary/[0.04]" : undefined}>
-              <div className={`grid gap-5 px-4 py-5 sm:px-5 lg:items-center lg:gap-4 ${rowGrid}`}>
-                <div className="min-w-0">
+              <div className={`grid gap-5 px-4 py-5 sm:px-5 md:grid-cols-2 xl:items-center xl:gap-4 ${rowGrid}`}>
+                <div className="min-w-0 md:col-span-2 xl:col-span-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-sm font-semibold">{study.name}</h2>
+                    <h2 className="text-sm font-semibold leading-5">{study.name}</h2>
                     {selected ? <span className="flex items-center gap-1 text-[10px] text-primary"><Check className="size-3" />Selected</span> : null}
                   </div>
                   <p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>
                 </div>
                 <div>
-                  <p className="mb-2 text-[10px] uppercase text-muted-foreground lg:hidden">Status</p>
+                  <p className="mb-2 text-[10px] uppercase text-muted-foreground xl:hidden">Status</p>
                   <StatusBadge status={study.status} />
                   <p className="mt-2 text-xs text-muted-foreground">{study.display_timezone} | {study.default_currency ?? "Currency pending"}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase text-muted-foreground lg:hidden">Testing period</p>
-                  <p className="mt-1 text-xs font-medium lg:mt-0">{formatDate(study.testing_starts_at, study.display_timezone)}</p>
+                  <p className="text-[10px] uppercase text-muted-foreground xl:hidden">Testing period</p>
+                  <p className="mt-1 text-xs font-medium xl:mt-0">{formatDate(study.testing_starts_at, study.display_timezone)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">to {formatDate(study.testing_ends_at, study.display_timezone)}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase text-muted-foreground lg:hidden">Assigned sessions</p>
-                  <div className="mt-2 grid grid-cols-3 gap-2 border-y border-border py-3 text-center lg:mt-0 lg:border-y-0 lg:py-0">
+                <div className="md:col-span-2 xl:col-span-1">
+                  <p className="text-[10px] uppercase text-muted-foreground xl:hidden">Assigned sessions</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 border-y border-border py-3 text-center xl:mt-0 xl:border-y-0 xl:py-0">
                     <Count label="Assigned" value={workload.assigned} />
                     <Count label="Need action" value={workload.needsAction} highlight={workload.needsAction > 0} />
                     <Count label="Submitted" value={workload.submitted} />
                   </div>
                 </div>
-                <div className="flex lg:justify-end">
-                  <Button onClick={() => open(study)} disabled={pending} variant={selected ? "default" : "outline"} className="w-full lg:w-auto">
-                    {pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : selected ? "Open overview" : "Select study"}
+                <div className="flex md:col-span-2 md:justify-end xl:col-span-1">
+                  <Button onClick={() => open(study)} disabled={pending} variant={selected ? "default" : "outline"} className="w-full sm:w-auto">
+                    {pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : actionLabel}
                     <ArrowRight className="size-4" />
                   </Button>
                 </div>

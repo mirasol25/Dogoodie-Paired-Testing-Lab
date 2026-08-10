@@ -110,7 +110,7 @@ export function PrintReportClient({
     <article className="mx-auto max-w-[8.5in] bg-white p-7 text-[#181b19] shadow-2xl print:max-w-none print:p-0 print:shadow-none">
       <div className="no-print mb-5 flex items-center justify-between rounded-md bg-[#07100d] p-3 text-white">
         <Button asChild variant="ghost">
-          <Link href="/paired-testing-demo/reports">
+          <Link href={`/reports/${study.id}`}>
             <ArrowLeft className="size-4" />
             Reports
           </Link>

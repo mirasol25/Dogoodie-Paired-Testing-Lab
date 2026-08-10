@@ -1,22 +1,13 @@
-import { AuditClient } from "@/components/paired-testing/audit/audit-client";
-import { PageHeader } from "@/components/paired-testing/shared/page-header";
-import { ViewerNoStudy } from "@/components/paired-testing/shared/viewer-no-study";
-import { requireActiveUser } from "@/lib/auth/server";
-import { getActiveStudy } from "@/lib/data/active-study";
-import { listActivityLogCategories, listActivityLogFeed } from "@/lib/data/activity-logs";
-import { listActivityLogFilterOptions } from "@/lib/data/activity-logs";
-import { fromZonedTime } from "date-fns-tz";
+import { GlobalAuditClient } from "@/components/paired-testing/audit/global-audit-client";
+import { requireRole } from "@/lib/auth/server";
+import { listActivityLogFeed } from "@/lib/data/activity-logs";
+import { listAccessibleStudies } from "@/lib/data/studies";
 
-export default async function AuditPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; actor?: string; target?: string; action?: string; from?: string; to?: string; page?: string }> }) {
-  const identity = await requireActiveUser("/paired-testing-demo/audit");
-  const study = await getActiveStudy();
-  if (!study) return identity.profile.role === "law_firm_viewer" ? <ViewerNoStudy /> : <div className="space-y-6"><PageHeader eyebrow="Operational history" title="Activity Log" description="Select an accessible study to inspect its activity." /></div>;
-  const params = await searchParams;
-  const page = Number.isInteger(Number(params.page)) ? Math.max(Number(params.page), 1) : 1;
-  const fromValue = params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from) ? params.from : undefined;
-  const toValue = params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to) ? params.to : undefined;
-  const dateFrom = fromValue ? fromZonedTime(`${fromValue}T00:00:00`, study.display_timezone).toISOString() : undefined;
-  const dateTo = toValue ? fromZonedTime(`${toValue}T23:59:59.999`, study.display_timezone).toISOString() : undefined;
-  const [feed, categories, options] = await Promise.all([listActivityLogFeed(study.id, { search: params.q, category: params.category, actorId: params.actor, targetType: params.target, action: params.action, dateFrom, dateTo, page }), listActivityLogCategories(study.id), listActivityLogFilterOptions(study.id)]);
-  return <AuditClient role={identity.profile.role} study={{ code: study.study_code, name: study.name, timezone: study.display_timezone }} events={feed.events} categories={categories} options={options} filters={{ search: params.q ?? "", category: params.category ?? "", actorId: params.actor ?? "", targetType: params.target ?? "", action: params.action ?? "", dateFrom: fromValue ?? "", dateTo: toValue ?? "", page: feed.page, pageSize: feed.pageSize, total: feed.total }} />;
+export default async function AuditPage() {
+  const identity = await requireRole(["test_coordinator", "expert_reviewer", "law_firm_viewer"], "/audit");
+  const accessible = await listAccessibleStudies();
+  const studies = identity.profile.role === "law_firm_viewer" ? accessible.filter((study) => ["completed", "archived"].includes(study.status)) : accessible;
+  const feeds = await Promise.all(studies.map(async (study) => ({ study, feed: await listActivityLogFeed(study.id, { pageSize: 100 }) })));
+  const events = feeds.flatMap(({ study, feed }) => feed.events.map((event) => ({ event, studyId: study.id, studyCode: study.study_code, studyName: study.name, timezone: study.display_timezone }))).sort((left, right) => new Date(right.event.created_at).getTime() - new Date(left.event.created_at).getTime());
+  return <GlobalAuditClient events={events} studies={studies.map((study) => ({ id: study.id, code: study.study_code, name: study.name }))} />;
 }

@@ -88,6 +88,13 @@
   .data-panel { @apply border border-border/90 bg-card/92 shadow-[0_1px_0_rgba(255,255,255,0.025)_inset]; }
   .label-kicker { @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80; }
   .subtle-grid { background-image: linear-gradient(rgb(255 255 255 / .025) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .025) 1px, transparent 1px); background-size: 24px 24px; }
+  .route-progress-bar { animation: route-progress 1.05s ease-in-out infinite; }
+}
+
+@keyframes route-progress {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(105%); }
+  100% { transform: translateX(260%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -110,3 +117,50 @@
   .protocol-print-document [role="complementary"] { break-inside: avoid; background: white !important; }
 }
 
+@media (max-width: 767px) {
+  .audit-filter-panel > div:first-child > div:first-child {
+    flex-direction: column;
+  }
+
+  .audit-filter-panel [data-slot="select-trigger"],
+  .audit-filter-panel input[type="date"],
+  .audit-filter-panel form {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .audit-filter-panel [data-slot="select-trigger"],
+  .audit-filter-panel input[type="date"],
+  .audit-filter-panel button {
+    min-height: 44px;
+  }
+
+  .audit-filter-panel button:has(> svg.lucide-x) {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 479px) {
+  .audit-filter-panel form {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .audit-filter-panel form input {
+    width: 100%;
+    padding-right: 0.75rem;
+  }
+
+  .audit-filter-panel form button[type="submit"] {
+    position: static;
+    width: 100%;
+    transform: none;
+    border: 1px solid var(--border);
+  }
+
+  .audit-filter-panel form > svg {
+    top: 22px;
+  }
+}

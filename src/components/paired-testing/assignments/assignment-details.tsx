@@ -42,35 +42,55 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
   const testerB = assignment.testers.find((tester) => tester.slot === "tester_b");
   const ownTester = assignment.testers.find((tester) => tester.userId === currentUserId);
   const ownSlot = ownTester?.slot;
+  const testerView = Boolean(ownTester) && !canManage;
+  const partnerTester = ownTester ? assignment.testers.find((tester) => tester.userId !== currentUserId) : undefined;
   const instructions = instructionsOf(assignment);
   const asynchronousTesting = assignment.testers.some((tester) => tester.testingSynchronization === "asynchronous");
+  const showPreparation = !testerView || ownTester?.status === "assigned" || ownTester?.status === "ready";
+
+  if (testerView && ownTester?.status === "submitted") {
+    return <TesterSubmissionReceipt study={study} assignment={assignment} tester={ownTester} submission={submission} evidence={evidence} timezone={timezone} />;
+  }
+
   return <div className="space-y-6">
-    <PageHeader eyebrow={`${study.study_code} - Assignment`} title={assignment.assignment_code} description="Controlled paired testing session" actions={<div className="flex gap-2">{canManage && !["completed", "cancelled", "expired"].includes(assignment.status) ? <CancelAssignment assignment={assignment} /> : null}<Button asChild variant="outline"><Link href="/paired-testing-demo/assignments"><ArrowLeft className="size-4" />Assignments</Link></Button></div>} />
+    <PageHeader eyebrow={`${study.study_code} - ${assignment.assignment_code}`} title={testerView ? "Your testing session" : assignment.assignment_code} description={testerView ? "Complete each step using your assigned condition, route, and testing window." : "Controlled paired testing session"} actions={<div className="flex gap-2">{canManage && !["completed", "cancelled", "expired"].includes(assignment.status) ? <CancelAssignment assignment={assignment} /> : null}<Button asChild variant="outline"><Link href={`/studies/${study.id}/assignments`}><ArrowLeft className="size-4" />{testerView ? "Your assignments" : "Assignments"}</Link></Button></div>} />
 
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-border py-3"><StatusBadge status={assignment.status} /><span className="mono text-xs text-muted-foreground">{assignment.protocolCode} v{assignment.protocolVersion}</span>{ownSlot ? <span className="text-xs font-medium">You are {ownSlot === "tester_a" ? "Tester A" : "Tester B"}</span> : null}</div>
 
-    {instructions ? <section className="overflow-hidden rounded-md border border-primary/35 bg-primary/[0.045]">
+    {testerView && ownTester ? <WorkflowProgress status={ownTester.status} /> : null}
+
+    {showPreparation && instructions ? <section className="overflow-hidden rounded-md border border-primary/35 bg-primary/[0.045]">
       <div className="flex items-center gap-3 border-b border-primary/20 px-4 py-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10"><ClipboardList className="size-4 text-primary" /></div><div><p className="text-[10px] uppercase tracking-wider text-primary">Coordinator instructions</p><h2 className="mt-0.5 text-sm font-semibold">Read before beginning this paired session</h2></div></div>
       <div className="px-4 py-4"><p className="max-w-4xl whitespace-pre-wrap text-sm leading-6 text-foreground">{instructions}</p></div>
     </section> : null}
 
-    <section className="border-y border-border py-5"><div className="mb-4"><p className="text-[10px] uppercase text-muted-foreground">Session overview</p><h2 className="mt-1.5 text-base font-semibold">Route and testing window</h2></div><div className="grid gap-px overflow-hidden rounded-md border border-border bg-border lg:grid-cols-[1fr_1fr_1.15fr]">
+    {showPreparation ? <section className="border-y border-border py-5"><div className="mb-4"><p className="text-[10px] uppercase text-muted-foreground">Session overview</p><h2 className="mt-1.5 text-base font-semibold">Route and testing window</h2></div><div className="grid gap-px overflow-hidden rounded-md border border-border bg-border lg:grid-cols-[1fr_1fr_1.15fr]">
       <Location label="Pickup" value={assignment.pickup_location} instructions={routeGuidance?.pickupInstructions ?? null} accent="primary" />
       <Location label="Destination" value={assignment.destination_location} instructions={routeGuidance?.destinationInstructions ?? null} accent="amber" />
       <div className="bg-background p-4"><div className="flex gap-3"><CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" /><div><p className="text-[10px] uppercase text-muted-foreground">{asynchronousTesting ? "Your testing window" : "Shared testing window"}</p><p className="mt-2 text-sm font-semibold leading-6">{formatSchedule(ownTester?.scheduledStart ?? assignment.scheduled_start, timezone)}</p><p className="text-xs leading-5 text-muted-foreground">Until {formatSchedule(ownTester?.scheduledEnd ?? assignment.scheduled_end, timezone)}</p><p className="mono mt-2 text-[10px] text-primary">{timezone}</p>{asynchronousTesting ? <p className="mt-2 text-xs leading-5 text-muted-foreground">Your partner has a separate window. Request-time synchronization is not evaluated.</p> : null}</div></div></div>
-    </div></section>
+    </div></section> : null}
+
+    {testerView && ownTester ? <div className="grid gap-4 border-t border-border pt-5 lg:grid-cols-2"><YourAssignment tester={ownTester} /><PartnerContact tester={partnerTester} /></div> : null}
 
     {ownTester ? <TesterReadiness assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
-    {ownTester ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
+    {ownTester?.status === "ready" ? <TesterStart assignment={assignment} ownSlot={ownTester} partnerSlot={assignment.testers.find((tester) => tester.userId !== currentUserId)} /> : null}
 
-    <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section>
+    {!testerView ? <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section> : null}
 
     {canManage && operations ? <OperationalProgress assignment={assignment} operations={operations} /> : null}
     {ownTester?.status === "in_progress" ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} /> : null}
-    {ownTester?.status === "submitted" ? <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><p className="text-sm font-semibold text-primary">Observation submitted</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{assignment.status === "ready_for_validation" ? "Both tester observations are complete and ready for matching and validation." : "Your observation is locked. Waiting for the partner tester to submit."}</p></section> : null}
-
   </div>;
 }
+
+function TesterSubmissionReceipt({ study, assignment, tester, submission, evidence, timezone }: { study: Study; assignment: AssignmentSummary; tester: AssignmentTesterSummary; submission: SubmissionRow | null; evidence: EvidenceRow[]; timezone: string }) {
+  const submittedAt = submission?.submitted_at ? formatSchedule(submission.submitted_at, timezone) : "Submission recorded";
+  const fare = submission?.displayed_fare === null || submission?.displayed_fare === undefined ? "Not recorded" : `${submission.currency ?? study.default_currency ?? ""} ${submission.displayed_fare}`.trim();
+  return <div className="space-y-6"><PageHeader eyebrow={`${study.study_code} - ${assignment.assignment_code}`} title="Submission receipt" description="Your observation is submitted and locked." actions={<Button asChild variant="outline"><Link href={`/studies/${study.id}/assignments`}><ArrowLeft className="size-4" />Your assignments</Link></Button>} />
+    <section className="rounded-md border border-primary/35 bg-primary/[0.035] p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-[10px] uppercase text-primary">Submission complete</p><h2 className="mt-1 text-lg font-semibold">{assignment.assignment_code}</h2><p className="mt-1 text-xs text-muted-foreground">Submitted {submittedAt}</p></div><StatusBadge status="submitted" /></div><div className="mt-5 grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-4"><ReceiptFact label="Your condition" value={tester.protocolValue ?? "Assigned condition"} /><ReceiptFact label="Displayed fare" value={fare} /><ReceiptFact label="Evidence" value={`${evidence.length} file${evidence.length === 1 ? "" : "s"}`} /><ReceiptFact label="Route" value={`${assignment.pickup_location} to ${assignment.destination_location}`} /></div><p className="mt-4 text-xs leading-5 text-muted-foreground">This record is read-only. Contact the coordinator if a correction is required.</p></section>
+  </div>;
+}
+
+function ReceiptFact({ label, value }: { label: string; value: string }) { return <div className="bg-background p-4"><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-2 break-words text-sm font-semibold">{value}</p></div>; }
 
 function CancelAssignment({ assignment }: { assignment: AssignmentSummary }) {
   const [open, setOpen] = useState(false);
@@ -99,6 +119,24 @@ function OperationalProgress({ assignment, operations }: { assignment: Assignmen
 
 function Location({ label, value, instructions, accent }: { label: string; value: string; instructions: string | null; accent: "primary" | "amber" }) {
   return <div className="flex gap-3 bg-background p-4"><MapPin className={`mt-0.5 size-4 shrink-0 ${accent === "primary" ? "text-primary" : "text-amber-400"}`} /><div className="min-w-0"><p className="text-[10px] uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-semibold leading-5">{value}</p>{instructions ? <div className="mt-3 border-t border-border pt-3"><p className="text-[10px] uppercase text-muted-foreground">Instructions</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-foreground">{instructions}</p></div> : <p className="mt-2 text-xs text-muted-foreground">No additional instructions.</p>}</div></div>;
+}
+
+function WorkflowProgress({ status }: { status: AssignmentTesterSummary["status"] }) {
+  const current = status === "assigned" ? 1 : status === "ready" ? 3 : status === "in_progress" ? 4 : status === "submitted" ? 6 : 1;
+  const steps = ["Review", "Ready", "Start", "Record", "Evidence", "Submit"];
+  return <section aria-label="Testing progress"><div className="mb-2 flex items-center justify-between"><p className="text-[10px] uppercase text-primary">Your progress</p><p className="text-[10px] text-muted-foreground">Step {current} of {steps.length}</p></div><div className="grid grid-cols-6 gap-1">{steps.map((step, index) => { const complete = index + 1 < current || status === "submitted"; const active = index + 1 === current && status !== "submitted"; return <div key={step} className="min-w-0"><div className={`h-1.5 rounded-sm ${complete || active ? "bg-primary" : "bg-secondary"}`} /><p className={`mt-2 hidden truncate text-[9px] sm:block ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}>{step}</p></div>; })}</div></section>;
+}
+
+function YourAssignment({ tester }: { tester: AssignmentTesterSummary }) {
+  return <section><p className="text-[10px] uppercase text-primary">Your assignment</p><div className="mt-3 h-[calc(100%-1.5rem)] overflow-hidden rounded-md border border-border"><dl className="divide-y divide-border px-4 text-xs"><InfoRow label="Side" value={tester.slot === "tester_a" ? "Tester A" : "Tester B"} /><InfoRow label="Service" value={[tester.platformName, tester.serviceName].filter(Boolean).join(" - ") || "Assigned service"} /><InfoRow label="Condition" value={tester.protocolValue ?? "Assigned condition"} /></dl></div></section>;
+}
+
+function PartnerContact({ tester }: { tester?: AssignmentTesterSummary }) {
+  return <section><p className="text-[10px] uppercase text-amber-300">Testing partner</p><div className="mt-3 h-[calc(100%-1.5rem)] overflow-hidden rounded-md border border-border"><dl className="divide-y divide-border px-4 text-xs"><InfoRow label="Name" value={tester?.displayName ?? "Partner not assigned"} /><InfoRow label="Email" value={tester?.email ?? "Not available"} email={Boolean(tester?.email)} /><InfoRow label="Condition" value={tester?.protocolValue ?? "Assigned condition unavailable"} /></dl></div></section>;
+}
+
+function InfoRow({ label, value, email = false }: { label: string; value: string; email?: boolean }) {
+  return <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-3 py-3"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{email ? <a href={`mailto:${value}`} className="text-primary hover:underline">{value}</a> : value}</dd></div>;
 }
 
 function TesterPanel({ side, tester, own, hideControls, accent }: { side: string; tester?: AssignmentTesterSummary; own: boolean; hideControls: boolean; accent: "primary" | "amber" }) {

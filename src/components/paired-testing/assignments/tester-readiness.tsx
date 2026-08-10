@@ -32,7 +32,7 @@ export function TesterReadiness({ assignment, ownSlot, partnerSlot }: { assignme
   const ready = ownSlot.status === "ready";
   const bothReady = ready && (partnerSlot?.status === "ready" || partnerSlot?.status === "in_progress");
 
-  if (ready) return <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Check className="size-4" /></div><div><h2 className="text-sm font-semibold">{bothReady ? "Both testers are ready" : "You are ready"}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{bothReady ? "The synchronized start control is available below." : `Waiting for ${partnerSlot?.displayName ?? "the partner tester"} to confirm readiness.`}</p></div></div></section>;
+  if (ready) return <section className="rounded-md border border-primary/25 bg-primary/[0.025] p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Check className="size-4" /></div><div><h2 className="text-sm font-semibold">{bothReady ? "Both testers are ready" : "You are ready"}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{bothReady ? "The synchronized start control is available below." : "Waiting for the partner tester to confirm readiness."}</p></div></div></section>;
 
   if (ownSlot.status !== "assigned" || assignment.status !== "not_started") return null;
   const complete = checked.length === checklist.length;

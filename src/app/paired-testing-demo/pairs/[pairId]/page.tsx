@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getActiveStudy } from "@/lib/data/active-study";
 import { demoConfig } from "@/config/paired-testing-demo.config";
-import { requireActiveUser } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/server";
 import { listStudyEvidence } from "@/lib/data/evidence";
 import { listProviderServiceOptions } from "@/lib/data/studies";
 import { listPairReviews, listPairValidationResults, listStudyMatchedPairs, type MatchedPairSubmission } from "@/lib/data/matched-pairs";
@@ -36,7 +36,7 @@ function SubmissionPanel({ label, submission }: { label: string; submission: Mat
 
 export default async function PairPage({ params }: { params: Promise<{ pairId: string }> }) {
   const { pairId } = await params;
-  const identity = await requireActiveUser(`/paired-testing-demo/pairs/${pairId}`);
+  const identity = await requireRole(["test_coordinator", "expert_reviewer", "law_firm_viewer"], `/pairs/${pairId}`);
   const study = await getActiveStudy();
   if (!study) notFound();
   const pairs = await listStudyMatchedPairs(study.id);
