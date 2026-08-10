@@ -77,7 +77,7 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
     {!testerView ? <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section> : null}
 
     {canManage && operations ? <OperationalProgress assignment={assignment} operations={operations} /> : null}
-    {ownTester?.status === "in_progress" && !ownSubmissionIsFinal && workflow ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} workflow={workflow} partnerName={partnerTester?.displayName ?? "your partner"} /> : null}
+    {ownTester?.status === "in_progress" && !ownSubmissionIsFinal && workflow ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} workflow={workflow} partnerName={partnerTester?.displayName ?? "your partner"} routeGuidance={routeGuidance} /> : null}
   </div>;
 }
 

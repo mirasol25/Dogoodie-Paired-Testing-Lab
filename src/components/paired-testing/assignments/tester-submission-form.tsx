@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow, TesterWorkflowState } from "@/lib/data/assignments";
+import type { AssignmentRouteGuidance, AssignmentSummary, AssignmentTesterSummary, EvidenceRow, SubmissionRow, TesterWorkflowState } from "@/lib/data/assignments";
 import type { Study } from "@/lib/data/studies";
 import { submissionDraftClientSchema } from "@/lib/validation/submission-schemas";
 import { EvidenceUploader } from "@/components/paired-testing/assignments/evidence-uploader";
@@ -26,7 +26,7 @@ function storedDraftIsComplete(submission: SubmissionRow | null) {
     && submission.network_type && submission.app_version && submission.battery_percentage !== null);
 }
 
-export function TesterSubmissionForm({ study, assignment, ownSlot, submission, technicalProfile, evidence, initialScreenshotValidation, screenshotPreviewUrl, timezone, workflow, partnerName }: { study: Study; assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; initialScreenshotValidation: ScreenshotValidationResult | null; screenshotPreviewUrl: string; timezone: string; workflow: TesterWorkflowState; partnerName: string }) {
+export function TesterSubmissionForm({ study, assignment, ownSlot, submission, technicalProfile, evidence, initialScreenshotValidation, screenshotPreviewUrl, timezone, workflow, partnerName, routeGuidance }: { study: Study; assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary; submission: SubmissionRow | null; technicalProfile: Pick<SubmissionRow, "device_type" | "operating_system" | "operating_system_version" | "app_version"> | null; evidence: EvidenceRow[]; initialScreenshotValidation: ScreenshotValidationResult | null; screenshotPreviewUrl: string; timezone: string; workflow: TesterWorkflowState; partnerName: string; routeGuidance: AssignmentRouteGuidance | null }) {
   const router = useRouter();
   const [savingDraft, startSaveDraft] = useTransition();
   const [submittingObservation, startSubmitObservation] = useTransition();
@@ -164,7 +164,7 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
   const detailsComplete = Boolean(values.displayedFare && values.quoteTimestamp && values.latitude && values.longitude && values.networkType && values.appVersion && values.batteryPercentage);
   const submissionReady = Boolean(submissionId && saved && evidenceState.requiredComplete && !evidenceState.mismatched);
 
-  if (!workflow.captureAcknowledged) return <CaptureChecklist assignment={assignment} ownSlot={ownSlot} />;
+  if (!workflow.captureAcknowledged) return <CaptureChecklist assignment={assignment} ownSlot={ownSlot} routeGuidance={routeGuidance} />;
 
   if (!workflow.bothEvidenceReady) return <section className="space-y-5 border-t border-border pt-6">
     <AssignmentCaptureSummary assignment={assignment} ownSlot={ownSlot} />
@@ -182,7 +182,7 @@ export function TesterSubmissionForm({ study, assignment, ownSlot, submission, t
   </section>;
 }
 
-function CaptureChecklist({ assignment, ownSlot }: { assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary }) {
+function CaptureChecklist({ assignment, ownSlot, routeGuidance }: { assignment: AssignmentSummary; ownSlot: AssignmentTesterSummary; routeGuidance: AssignmentRouteGuidance | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [videoOpen, setVideoOpen] = useState(false);
@@ -197,7 +197,14 @@ function CaptureChecklist({ assignment, ownSlot }: { assignment: AssignmentSumma
   const captureSteps = [
     { title: "Start screen recording", detail: "Turn on your phone's screen recorder before opening the provider app." },
     { title: `Open ${ownSlot.platformName ?? "the provider app"}`, detail: `Use the same account and device prepared for this assignment.` },
-    { title: "Enter the assigned route", detail: `${assignment.pickup_location} to ${assignment.destination_location}.` },
+    {
+      title: "Enter the assigned route",
+      detail: `${assignment.pickup_location} to ${assignment.destination_location}.`,
+      notes: [
+        { label: "Pickup note", value: routeGuidance?.pickupInstructions },
+        { label: "Destination note", value: routeGuidance?.destinationInstructions },
+      ].filter((note): note is { label: string; value: string } => Boolean(note.value)),
+    },
     { title: "Select the assigned service", detail: `${ownSlot.serviceName ?? "Use the ride tier shown above"}. Do not select another tier.` },
     { title: "Capture the quote", detail: "Wait for the fare to load, then take a full-screen screenshot showing the selected tier, fare, and device time." },
     { title: "Save the recording", detail: "Stop the screen recording after the screenshot and confirm both files are saved on your phone." },
@@ -219,7 +226,7 @@ function CaptureChecklist({ assignment, ownSlot }: { assignment: AssignmentSumma
     <AssignmentCaptureSummary assignment={assignment} ownSlot={ownSlot} />
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] uppercase text-primary">Capture & upload</p><h2 className="mt-1.5 text-lg font-semibold">Capture the assigned quote</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Follow these steps with your partner before uploading evidence.</p></div><Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setVideoOpen(true)}><PlayCircle className="size-4" />Watch video tutorial</Button></div>
     <Dialog open={videoOpen} onOpenChange={setVideoOpen}><DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Capture and upload tutorial</DialogTitle><DialogDescription>Watch the complete capture procedure, then follow the assigned route and service shown on this page.</DialogDescription></DialogHeader><div className="overflow-hidden rounded-md border border-border bg-black"><video className="max-h-[72vh] w-full" controls playsInline preload="metadata"><source src="/tutorials/capture-evidence-guide.mp4" type="video/mp4" />Your browser does not support this tutorial video.</video></div><p className="text-xs leading-5 text-muted-foreground">The assignment values on this page are authoritative. If the example in the video uses a different route or ride tier, use your assigned values.</p></DialogContent></Dialog>
-    <ol className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">{captureSteps.map((step, index) => <li key={step.title} className="flex gap-3 bg-background p-4"><span className="numeric grid size-6 shrink-0 place-items-center rounded-full border border-primary/40 bg-primary/10 text-[11px] font-semibold text-primary">{index + 1}</span><div className="min-w-0"><p className="text-sm font-semibold">{step.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p></div></li>)}</ol>
+    <ol className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">{captureSteps.map((step, index) => <li key={step.title} className="flex gap-3 bg-background p-4"><span className="numeric grid size-6 shrink-0 place-items-center rounded-full border border-primary/40 bg-primary/10 text-[11px] font-semibold text-primary">{index + 1}</span><div className="min-w-0"><p className="text-sm font-semibold">{step.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p>{"notes" in step && step.notes?.length ? <dl className="mt-3 space-y-2 border-t border-border pt-3">{step.notes.map((note) => <div key={note.label}><dt className="text-[9px] uppercase text-primary">{note.label}</dt><dd className="mt-0.5 text-[11px] leading-4 text-foreground">{note.value}</dd></div>)}</dl> : null}</div></li>)}</ol>
     <div><h3 className="text-sm font-semibold">Confirm before uploading</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Check each item after completing the instructions. Both upload controls unlock when all items are confirmed.</p></div>
     <div className="divide-y divide-border overflow-hidden rounded-md border border-border">{items.map((item, index) => { const selected = checked.includes(index); return <label key={item} className={`flex min-h-14 cursor-pointer items-start gap-3 px-4 py-4 text-sm leading-6 ${selected ? "bg-primary/[0.055]" : "hover:bg-secondary/25"}`}><Checkbox className="mt-0.5" checked={selected} onCheckedChange={(value) => setChecked((current) => value === true ? [...current, index] : current.filter((entry) => entry !== index))} /><span className={selected ? "text-foreground" : "text-muted-foreground"}>{item}</span></label>; })}</div>
     <div className="grid gap-3 sm:grid-cols-2"><div className="flex items-center gap-3 rounded-md border border-border p-4"><FileImage className="size-4 text-muted-foreground" /><div><p className="text-sm font-medium">Quote screenshot</p><p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><LockKeyhole className="size-3" />Locked until checklist completion</p></div></div><div className="flex items-center gap-3 rounded-md border border-border p-4"><Film className="size-4 text-muted-foreground" /><div><p className="text-sm font-medium">Screen recording</p><p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><LockKeyhole className="size-3" />Locked until checklist completion</p></div></div></div>

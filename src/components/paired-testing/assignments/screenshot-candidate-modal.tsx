@@ -145,14 +145,15 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
   const editingField = fields.find((field) => field.type === editing);
 
   return <Dialog open={open} onOpenChange={pending ? undefined : changeOpen}>
-    <DialogContent className="flex max-h-[94dvh] flex-col overflow-hidden p-0 sm:max-w-5xl">
-      <DialogHeader className="border-b border-border px-4 py-4 pr-12 sm:px-6">
+    <DialogContent className="flex max-h-[96dvh] flex-col overflow-hidden p-0 sm:max-w-5xl">
+      <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 sm:px-6 sm:py-4">
         <DialogTitle>Confirm screenshot details</DialogTitle>
-        <DialogDescription>Check the suggested values against the highlighted screenshot. Change only a value that was detected incorrectly.</DialogDescription>
+        <DialogDescription>Compare the highlighted screenshot with the detected values below. Change only an incorrect value.</DialogDescription>
       </DialogHeader>
 
-      <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)] lg:overflow-hidden">
-        <div className="min-h-72 border-b border-border bg-black/35 p-3 lg:min-h-0 lg:overflow-auto lg:border-b-0 lg:border-r">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(220px,38dvh)_auto] overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)] lg:grid-rows-1 lg:overflow-hidden">
+        <div className="relative min-h-0 overflow-auto border-b border-border bg-black/45 p-2 sm:p-3 lg:border-b-0 lg:border-r">
+          <p className="sticky top-0 z-10 mx-auto mb-2 w-fit rounded-full border border-white/15 bg-black/80 px-3 py-1 text-[10px] text-white/80 lg:hidden">Scroll to inspect the full screenshot</p>
           <div className="relative mx-auto w-full max-w-xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageUrl} alt="Uploaded quote screenshot with highlighted detected values" className="block h-auto w-full" />
@@ -164,17 +165,17 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
           </div>
         </div>
 
-        <div className="space-y-4 p-4 lg:overflow-y-auto lg:p-5">
-          <div className="rounded-md border border-primary/30 bg-primary/[0.05] p-3 text-xs leading-5">
-            <p className="font-semibold text-primary">Suggested from your screenshot</p>
-            <p className="mt-1 text-muted-foreground">The final values remain linked to OCR regions. Typed replacements are not allowed.</p>
+        <div className="space-y-3 p-3 sm:p-4 lg:overflow-y-auto lg:p-5">
+          <div className="rounded-md border border-primary/30 bg-primary/[0.05] px-3 py-2.5 text-xs leading-5">
+            <p className="font-semibold text-primary">Detected from your screenshot</p>
+            <p className="mt-0.5 text-muted-foreground">Each confirmed value stays linked to its highlighted OCR region.</p>
           </div>
 
           <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
             {selected.map((field) => <div key={field.type} className="grid grid-cols-[1fr_auto] items-center gap-3 p-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2"><span className={`size-2 shrink-0 rounded-full bg-current ${field.color}`} /><p className="text-[10px] uppercase text-muted-foreground">{field.title}</p></div>
-                <p className="mt-1 truncate text-sm font-semibold">{field.candidate?.displayValue ?? "Not detected"}</p>
+                <p className="mt-1 break-words text-sm font-semibold">{field.candidate?.displayValue ?? "Not detected"}</p>
                 {field.type === "ride_card" ? <p className="mt-1 text-[11px] text-muted-foreground">Required: {expectedService}</p> : null}
               </div>
               <Button type="button" size="sm" variant="outline" onClick={() => setEditing(field.type)}><Pencil className="size-3.5" />Change</Button>
@@ -192,8 +193,8 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <Button type="button" variant="outline" disabled={pending} onClick={() => changeOpen(false)}>Replace screenshot</Button>
+      <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <Button type="button" variant="outline" disabled={pending} onClick={() => changeOpen(false)}>Upload different screenshot</Button>
         <Button type="button" disabled={!complete || pending || editing !== null} onClick={confirm}>{pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{pending ? "Confirming..." : "Confirm detected values"}</Button>
       </div>
     </DialogContent>
