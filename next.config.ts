@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Tesseract spawns a Node worker using its package-relative __dirname.
   // Keep it external so Turbopack does not rewrite that path to C:\\ROOT.
-  serverExternalPackages: ["tesseract.js", "tesseract.js-core"],
+  serverExternalPackages: ["tesseract.js", "tesseract.js-core", "@google-cloud/vision"],
   turbopack: {
     root: process.cwd(),
   },

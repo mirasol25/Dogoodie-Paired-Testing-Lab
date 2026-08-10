@@ -6,8 +6,9 @@ import type { ScreenshotOCRResult } from "./schemas";
 import { parseStatusBarTime } from "./time-parser";
 import { recognizeLayout, recognizeText, withOCRWorker } from "./tesseract";
 import type { ScreenshotCandidate } from "./schemas";
+import { getOCRProvider } from "./provider";
 
-function labelFromText(text: string) {
+export function labelFromText(text: string) {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   // Ride names conventionally share a row with the selected fare. This avoids
   // treating route/map or promotional text as the selected service.
@@ -30,7 +31,7 @@ function labelFromText(text: string) {
   return fallback ? cleanRideLabel(fallback) : null;
 }
 
-function cleanRideLabel(value: string) {
+export function cleanRideLabel(value: string) {
   // Ride cards commonly render a passenger icon and count after the label.
   // Tesseract reads the icon as `&`, `@`, or `|`; it is UI metadata, not a
   // service alias (for example: `UberX &4` -> `UberX`).
@@ -38,6 +39,10 @@ function cleanRideLabel(value: string) {
 }
 
 export async function extractSelectedRide(image: Buffer, platformSlug: string): Promise<ScreenshotOCRResult> {
+  if (getOCRProvider() === "google") {
+    const { extractSelectedRideWithGoogle } = await import("./extract-selected-ride-google");
+    return extractSelectedRideWithGoogle(image, platformSlug);
+  }
   const metadata = await sharp(image).metadata();
   const adapter = getPlatformAdapter(platformSlug);
   const crop = await adapter.detectSelectedCard(image);
