@@ -441,7 +441,7 @@ export function ReportsClient({
         </p>
       </section>
       <ReportCharts pairs={pairs} reviews={reviews} />
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="overflow-hidden rounded-md border border-border">
           <div className="border-b border-border bg-card/35 px-4 py-3">
             <p className="text-[10px] uppercase text-primary">
@@ -631,7 +631,7 @@ function Output({
   detail: string;
 }) {
   return (
-    <div className="flex min-h-24 gap-3 border-b border-border p-4 odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0">
+    <div className="flex min-h-20 gap-3 border-b border-border p-4 odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0">
       <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
       <div>
         <p className="text-sm font-medium">{title}</p>
