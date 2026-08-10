@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronDown, LayoutDashboard, Search } from "lucide-react";
+import { Check, ChevronDown, LayoutDashboard, LoaderCircle, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PageLoadingView } from "@/components/paired-testing/shared/page-loading-view";
 import { cn } from "@/lib/utils";
 
 interface DashboardStudyOption { id: string; code: string; name: string }
@@ -15,6 +16,7 @@ export function DashboardScopeSelector({ studies, selectedId, compact = false }:
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
+  const [loadingLabel, setLoadingLabel] = useState("");
   const selected = studies.find((study) => study.id === selectedId);
   const visible = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -22,20 +24,22 @@ export function DashboardScopeSelector({ studies, selectedId, compact = false }:
   }, [query, studies]);
 
   function choose(id?: string) {
+    if (id === selectedId || (!id && !selectedId)) { setOpen(false); return; }
+    setLoadingLabel(id ? studies.find((study) => study.id === id)?.name ?? "Selected study" : "All studies");
     setOpen(false);
     setQuery("");
     startTransition(() => router.push(id ? `/dashboard?study=${id}` : "/dashboard"));
   }
 
-  return <Popover open={open} onOpenChange={setOpen}>
+  return <><Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>
       <Button variant={compact ? "ghost" : "outline"} className={compact ? "h-auto min-h-10 max-w-[min(62vw,24rem)] justify-between gap-3 px-2" : "h-auto min-h-9 w-full justify-between gap-3 sm:w-80"} disabled={pending}>
         {compact ? <span className="grid size-8 shrink-0 place-items-center rounded-md border border-primary/20 bg-primary/[0.07] text-primary"><LayoutDashboard className="size-4" /></span> : null}
-        <span className="min-w-0 text-left">
-          <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-primary">{selected?.code ?? "ALL STUDIES"}</span>
-          <span className="block truncate text-sm font-medium">{selected ? selected.name : "Portfolio Dashboard"}</span>
+        <span className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-primary">{pending ? "UPDATING SCOPE" : selected?.code ?? "ALL STUDIES"}</span>
+          <span className="block truncate text-sm font-medium">{pending ? `Loading ${loadingLabel}...` : selected ? selected.name : "Portfolio Dashboard"}</span>
         </span>
-        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+        {pending ? <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" aria-label="Loading dashboard" /> : <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />}
       </Button>
     </PopoverTrigger>
     <PopoverContent align={compact ? "start" : "end"} className="w-[min(92vw,27rem)] overflow-hidden p-0">
@@ -54,5 +58,5 @@ export function DashboardScopeSelector({ studies, selectedId, compact = false }:
       </div>
       <div className="border-t border-border bg-card/35 px-3 py-2 text-[10px] text-muted-foreground">{visible.length} of {studies.length} studies</div>
     </PopoverContent>
-  </Popover>;
+  </Popover>{pending ? <div className="fixed inset-x-0 bottom-0 top-16 z-[15] overflow-y-auto bg-background lg:left-64" role="status" aria-live="polite"><PageLoadingView /></div> : null}</>;
 }
