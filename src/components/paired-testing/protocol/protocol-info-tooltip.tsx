@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export function ProtocolInfoTooltip({ label, children }: { label: string; children: string }) {
+export function ProtocolInfoTooltip({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return <Tooltip open={open} onOpenChange={setOpen}>
     <TooltipTrigger asChild>

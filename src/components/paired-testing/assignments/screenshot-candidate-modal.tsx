@@ -162,20 +162,19 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
       .map((candidate) => ({ candidate, score: boundsOverlap(drawBounds, candidate.bounds) }))
       .sort((left, right) => right.score - left.score)[0]?.candidate;
     if (!bestCandidate || boundsOverlap(drawBounds, bestCandidate.bounds) <= 0) {
-      toast.error(`No ${editing === "ride_card" ? "ride" : "fare"} value matched that highlighted area.`);
+      toast.error("No fare value matched that highlighted area.");
       return;
     }
-    if (editing === "ride_card") toast.info(`Highlighted ride OCR value: ${bestCandidate.displayValue}`);
-    if (editing === "fare") toast.info(`Highlighted fare OCR value: ${bestCandidate.displayValue}`);
+    toast.info(`Highlighted fare OCR value: ${bestCandidate.displayValue}`);
     if (isInvalid(bestCandidate)) {
-      toast.error(bestCandidate.validationMessage || `The highlighted ${editing === "ride_card" ? "ride" : "fare"} value is not available for this test attempt.`);
+      toast.error(bestCandidate.validationMessage || "The highlighted fare value is not available for this test attempt.");
       return;
     }
     choose(bestCandidate);
     setDrawing(false);
     setDrawBounds(null);
     setEditing(null);
-    toast.success(`${editing === "ride_card" ? "Ride" : "Fare"} selected from the highlighted area.`);
+    toast.success("Fare selected from the highlighted area.");
   }
 
   function confirm() {
