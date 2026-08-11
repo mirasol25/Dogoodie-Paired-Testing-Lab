@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { Archive, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, LocateFixed, LoaderCircle, MapPin, Pause, Pencil, Play, Plus, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { createStudyAction, deleteDraftStudyAction, extendStudyTestingPeriodAction, selectStudyAction, transitionStudyStatusAction, updateFullDraftStudyAction } from "@/app/paired-testing-demo/studies/actions";
+import { createStudyAction, deleteDraftStudyAction, extendStudyTestingPeriodAction, transitionStudyStatusAction, updateFullDraftStudyAction } from "@/app/paired-testing-demo/studies/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
   const [customLatitude, setCustomLatitude] = useState("");
   const [customLongitude, setCustomLongitude] = useState("");
   const [draftReady, setDraftReady] = useState(Boolean(initialData));
+  const locationResolutionVersion = useRef<Record<RoutePointMode, number>>({ pickup: 0, destination: 0 });
 
   /* eslint-disable react-hooks/set-state-in-effect -- Restore the browser-only draft after hydration. */
   useEffect(() => {
@@ -187,6 +188,8 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
       if (pickup && destination && pickup.currencyCode !== destination.currencyCode) nextErrors.destination = "Pickup and destination must use the same currency.";
       if (pickup && destination && pickup.latitude === destination.latitude && pickup.longitude === destination.longitude) nextErrors.destination = "Pickup and destination must be different.";
       if (routeName.trim().length < 3) nextErrors.routeName = "Enter a route name.";
+      if (!pickupInstructions.trim()) nextErrors.pickupInstructions = "Enter pickup instructions for testers.";
+      if (!destinationInstructions.trim()) nextErrors.destinationInstructions = "Enter destination instructions for testers.";
     }
     if (index === 2) {
       if (studyType === "within_platform_pair" && selectedPlatformIds.length !== 1) nextErrors.providers = "Select one provider.";
@@ -251,10 +254,13 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
   }
 
   function assignPoint(result: GeocodingResult) {
+    // Ignore any in-flight map lookup for this side after a search result is chosen.
+    locationResolutionVersion.current[activeMode] += 1;
     const current = activeMode === "pickup" ? pickup : destination;
     const point: DraftPoint = {
       ...result,
-      label: current?.label || result.formattedAddress.split(",")[0],
+      // A new search result represents a new pin, so replace the old card label.
+      label: result.formattedAddress.split(",")[0],
       isPublicLocation: current?.isPublicLocation ?? false,
     };
     if (activeMode === "pickup") {
@@ -270,16 +276,20 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
   }
 
   async function resolveCoordinates(mode: RoutePointMode, latitude: number, longitude: number) {
+    const resolutionVersion = locationResolutionVersion.current[mode] + 1;
+    locationResolutionVersion.current[mode] = resolutionVersion;
     setResolving(true);
     try {
       const response = await fetch(`/api/geocoding/reverse?lat=${latitude}&lng=${longitude}`);
       const payload = await response.json() as { result?: GeocodingResult; message?: string };
       if (!response.ok || !payload.result) throw new Error(payload.message);
       if (payload.result.countryCode !== searchCountry) throw new Error(`The coordinates must be inside ${{ PH: "the Philippines", US: "the United States", CA: "Canada" }[searchCountry]}.`);
+      if (locationResolutionVersion.current[mode] !== resolutionVersion) return;
       const current = mode === "pickup" ? pickup : destination;
       const point: DraftPoint = {
         ...payload.result,
-        label: current?.label || payload.result.formattedAddress.split(",")[0],
+        // Dragging or clicking a new pin must refresh the entire location card.
+        label: payload.result.formattedAddress.split(",")[0],
         isPublicLocation: current?.isPublicLocation ?? false,
       };
       if (mode === "pickup") {
@@ -291,9 +301,10 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
         if (!routeName.trim() && pickup) setRouteName(`${pickup.label} to ${point.label}`);
       }
     } catch (error) {
+      if (locationResolutionVersion.current[mode] !== resolutionVersion) return;
       toast.error(error instanceof Error ? error.message : "Location lookup failed.");
     } finally {
-      setResolving(false);
+      if (locationResolutionVersion.current[mode] === resolutionVersion) setResolving(false);
     }
   }
 
@@ -464,7 +475,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
           router.push("/studies");
           router.refresh();
         } else if (result.studyId) {
-          router.push(`/studies/${result.studyId}/members`);
+          router.push(`/paired-testing-demo/studies/${result.studyId}/members`);
           router.refresh();
         }
       } else toast.error(result.message);
@@ -545,7 +556,7 @@ export function CreateStudyForm({ providerOptions, initialData }: { providerOpti
               return <section key={mode} className={`space-y-3 rounded-md border p-4 ${activeMode === mode ? "border-primary" : "border-border"}`}><button type="button" onClick={() => changeActiveMode(mode)} className="flex w-full items-center justify-between text-left"><span className="text-sm font-semibold capitalize">{mode}</span>{point ? <Badge variant="secondary"><Check className="size-3" />Pinned</Badge> : <Badge variant="outline">Not set</Badge>}</button><div className="space-y-2"><Label htmlFor={`${mode}-label`}>Location label</Label><Input id={`${mode}-label`} value={point?.label ?? ""} disabled={!point} onChange={(event) => point && setPoint({ ...point, label: event.target.value })} placeholder={`${mode} label`} aria-invalid={Boolean(errors[mode])} /></div><p className="min-h-10 text-xs leading-5 text-muted-foreground">{point?.formattedAddress ?? "No location selected."}</p>{point ? <><div className="grid grid-cols-2 gap-2 border-y border-border py-3 text-xs"><div><span className="block text-muted-foreground">Coordinates</span><span className="mono mt-1 block text-[10px]">{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</span></div><div><span className="block text-muted-foreground">Market</span><span className="mt-1 block">{point.currencyCode} · {point.timezone}</span></div></div><label className="flex items-start gap-2 text-xs text-muted-foreground"><Checkbox checked={point.isPublicLocation} onCheckedChange={(checked) => setPoint({ ...point, isPublicLocation: checked === true })} />Standardized public location</label></> : null}<FieldError message={errors[mode]} /><FieldError message={errors[`${mode}Public`]} /></section>;
             })}
           </div>
-          <div className="grid gap-5 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="route-name">Route name</Label><Input id="route-name" value={routeName} onChange={(event) => setRouteName(event.target.value)} aria-invalid={Boolean(errors.routeName)} /><FieldError message={errors.routeName} /></div><div className="space-y-2"><Label htmlFor="route-notes">Route notes</Label><Input id="route-notes" value={routeNotes} onChange={(event) => setRouteNotes(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="pickup-instructions">Pickup instructions</Label><Textarea id="pickup-instructions" value={pickupInstructions} onChange={(event) => setPickupInstructions(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="destination-instructions">Destination instructions</Label><Textarea id="destination-instructions" value={destinationInstructions} onChange={(event) => setDestinationInstructions(event.target.value)} /></div></div>
+          <div className="grid gap-5 md:grid-cols-2"><div className="space-y-2"><Label htmlFor="route-name">Route name</Label><Input id="route-name" value={routeName} onChange={(event) => setRouteName(event.target.value)} aria-invalid={Boolean(errors.routeName)} /><FieldError message={errors.routeName} /></div><div className="space-y-2"><Label htmlFor="route-notes">Route notes</Label><Input id="route-notes" value={routeNotes} onChange={(event) => setRouteNotes(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="pickup-instructions">Pickup instructions <span className="text-destructive">*</span></Label><Textarea id="pickup-instructions" value={pickupInstructions} onChange={(event) => setPickupInstructions(event.target.value)} aria-invalid={Boolean(errors.pickupInstructions)} required /><FieldError message={errors.pickupInstructions} /></div><div className="space-y-2"><Label htmlFor="destination-instructions">Destination instructions <span className="text-destructive">*</span></Label><Textarea id="destination-instructions" value={destinationInstructions} onChange={(event) => setDestinationInstructions(event.target.value)} aria-invalid={Boolean(errors.destinationInstructions)} required /><FieldError message={errors.destinationInstructions} /></div></div>
         </div>
       ) : null}
 
@@ -697,9 +708,10 @@ function DraftStudyActions({ study }: { study: Study }) {
   </>;
 }
 
-function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive, readiness, providerOptions }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
+function StudyList({ studies, activeProtocolStudyIds, canArchive, readiness, providerOptions }: { studies: Study[]; activeProtocolStudyIds: string[]; canArchive: boolean; readiness: Record<string, StudyCompletionReadiness>; providerOptions: ProviderServiceOption[] }) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isOpening, startOpeningTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const filteredStudies = useMemo(() => studies.filter((study) => {
@@ -709,15 +721,9 @@ function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive,
       && (!needle || `${study.name} ${study.study_code} ${services}`.toLowerCase().includes(needle));
   }), [providerOptions, query, status, studies]);
   function openStudy(study: Study) {
-    if (study.id === activeStudyId) {
-      router.push(`/studies/${study.id}`);
-      return;
-    }
     setPendingId(study.id);
-    void selectStudyAction(study.id).then((result) => {
-      if (result.ok) router.push(`/studies/${study.id}`);
-      else toast.error(result.message);
-      setPendingId(null);
+    startOpeningTransition(() => {
+      router.push(`/paired-testing-demo/studies/${study.id}`);
     });
   }
   const summary = [
@@ -729,11 +735,11 @@ function StudyList({ studies, activeStudyId, activeProtocolStudyIds, canArchive,
   return <div className="space-y-4"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{summary.map((item) => <div key={item.label} className="rounded-md border border-border bg-secondary/15 px-4 py-3"><p className="text-[10px] uppercase text-muted-foreground">{item.label}</p><p className="mt-1 text-xl font-semibold">{item.value}</p></div>)}</div><div className="flex flex-col gap-3 border-y border-border py-3 sm:flex-row sm:items-center sm:justify-between"><div className="relative w-full sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, code, provider, or tier" className="pl-9" /></div><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div><div className="overflow-x-auto rounded-md border border-border"><Table><TableHeader className="bg-secondary/45"><TableRow><TableHead>Study</TableHead><TableHead>Mode</TableHead><TableHead>Status</TableHead><TableHead>Currency</TableHead><TableHead>Updated</TableHead><TableHead><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{filteredStudies.map((study) => {
     const serviceLabel = configuredStudyServices(study, providerOptions).map((service) => `${service.platformName} · ${service.serviceName}`).join(" vs ");
     const canManageDraft = study.status === "draft" && !activeProtocolStudyIds.includes(study.id);
-    return <TableRow key={study.id} className={study.id === activeStudyId ? "bg-primary/[0.035]" : undefined}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => openStudy(study)} disabled={pendingId === study.id} className="text-left font-medium hover:text-primary hover:underline disabled:cursor-wait">{study.name}</button>{study.id === activeStudyId ? <Badge variant="outline">Current workspace</Badge> : null}</div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-64"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" onClick={() => openStudy(study)} disabled={pendingId === study.id}>{pendingId === study.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}{pendingId === study.id ? "Opening..." : "Open"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
+  return <TableRow key={study.id}><TableCell className="min-w-72 whitespace-normal"><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => openStudy(study)} disabled={pendingId === study.id || isOpening} className="text-left font-medium hover:text-primary hover:underline disabled:cursor-wait">{study.name}</button></div><p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>{serviceLabel ? <p className="mt-2 text-xs font-medium text-primary">{serviceLabel}</p> : <p className="mt-2 text-xs text-muted-foreground">Testing service not configured</p>}</TableCell><TableCell className="text-xs">{study.study_type === "within_platform_pair" ? "Within platform" : "Cross platform"}</TableCell><TableCell><Badge variant={study.status === "active" ? "default" : "outline"} className="capitalize">{study.status}</Badge></TableCell><TableCell>{study.default_currency ?? "-"}</TableCell><TableCell className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(study.updated_at))}</TableCell><TableCell className="min-w-64"><div className="space-y-2"><div className="flex justify-end gap-2"><Button asChild size="sm" variant="outline"><Link href={`/paired-testing-demo/studies/${study.id}/members`}><Users className="size-3.5" />Members</Link></Button><Button size="sm" onClick={() => openStudy(study)} disabled={pendingId === study.id || isOpening}>{pendingId === study.id || isOpening ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}{pendingId === study.id || isOpening ? "Opening..." : "Open"}</Button></div>{canManageDraft || study.status !== "archived" ? <div className="flex flex-wrap items-center justify-end gap-1 border-t border-border pt-2"><span className="mr-auto text-[9px] uppercase text-muted-foreground">Manage</span>{canManageDraft ? <DraftStudyActions study={study} /> : null}<StudyLifecycleControl study={study} canArchive={canArchive} readiness={readiness[study.id]} /></div> : null}</div></TableCell></TableRow>;
   })}{!filteredStudies.length ? <TableRow><TableCell colSpan={6} className="h-28 text-center text-muted-foreground">No studies match the current filters.</TableCell></TableRow> : null}</TableBody></Table></div><p className="text-xs text-muted-foreground">Showing {filteredStudies.length} of {studies.length} studies</p></div>;
 }
 
-export function StudiesManager({ studies, activeStudyId, activeProtocolStudyIds, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
+export function StudiesManager({ studies, activeProtocolStudyIds, providerOptions, role, readiness }: { studies: Study[]; activeStudyId: string | null; activeProtocolStudyIds: string[]; providerOptions: ProviderServiceOption[]; role: AppRole; readiness: Record<string, StudyCompletionReadiness> }) {
   const [tab, setTab] = useState("studies");
-  return <Tabs value={tab} onValueChange={setTab}><div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between"><div><TabsList><TabsTrigger value="studies">Study register</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><p className="mt-2 text-xs text-muted-foreground">Open a study to load its workspace, or manage its members and lifecycle.</p></div><Button onClick={() => setTab("create")}><Plus className="size-4" />New study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeStudyId={activeStudyId} activeProtocolStudyIds={activeProtocolStudyIds} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
+  return <Tabs value={tab} onValueChange={setTab}><div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between"><div><TabsList><TabsTrigger value="studies">Study register</TabsTrigger><TabsTrigger value="create">Create study</TabsTrigger></TabsList><p className="mt-2 text-xs text-muted-foreground">Open a study to load its workspace, or manage its members and lifecycle.</p></div><Button onClick={() => setTab("create")}><Plus className="size-4" />New study</Button></div><TabsContent value="studies" className="mt-5"><StudyList studies={studies} activeProtocolStudyIds={activeProtocolStudyIds} canArchive={role === "admin"} readiness={readiness} providerOptions={providerOptions} /></TabsContent><TabsContent value="create" className="mt-5"><CreateStudyForm providerOptions={providerOptions} /></TabsContent></Tabs>;
 }

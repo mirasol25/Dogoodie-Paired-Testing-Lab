@@ -240,7 +240,7 @@ export function AppShell({ children, user, dashboardStudies = [] }: { children: 
             <AccountPanel user={user} compact />
           </div>
         </header>
-        <main id="main-content" className="box-border min-w-0 w-full max-w-[1600px] overflow-x-hidden px-3 py-4 sm:p-6 lg:mx-auto lg:p-7">
+        <main id="main-content" className="box-border min-w-0 w-full max-w-[1600px] overflow-x-clip px-3 py-4 sm:p-6 lg:mx-auto lg:p-7">
           {children}
         </main>
       </div>

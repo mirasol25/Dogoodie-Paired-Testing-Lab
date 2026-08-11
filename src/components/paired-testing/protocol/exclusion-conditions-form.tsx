@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
+import { ProtocolInfoTooltip } from "@/components/paired-testing/protocol/protocol-info-tooltip";
 import type { Json } from "@/types/database.types";
 
 type OptionalExclusion = "outside_assignment_window" | "declared_protocol_deviation" | "evidence_timestamp_mismatch" | "duplicate_evidence";
@@ -69,7 +70,7 @@ export function ExclusionConditionsForm({ studyId, protocolId, fixedControls, ev
 
   return (
     <section className="space-y-6 border-t border-border pt-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><h2 className="mt-1.5 text-lg font-semibold">Exclusion conditions</h2></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><div className="mt-1.5 flex items-center gap-1"><h2 className="text-lg font-semibold">Exclusion conditions</h2><ProtocolInfoTooltip label="About exclusion conditions">These conditions create technical findings or can disqualify a pair. The expert reviewer decides whether to accept with exception or reject a completed pair.</ProtocolInfoTooltip></div></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
 
       <div className="space-y-3"><h3 className="text-sm font-semibold">Automatic failure rules</h3><div className="grid gap-x-5 gap-y-2 border-y border-border py-4 md:grid-cols-2">{automaticRules.map((rule) => <div key={rule} className="flex items-start gap-2 text-xs"><Ban className="mt-0.5 size-3.5 shrink-0 text-destructive" /><span>{rule}</span></div>)}</div></div>
 

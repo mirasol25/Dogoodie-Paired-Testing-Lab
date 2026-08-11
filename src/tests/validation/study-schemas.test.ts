@@ -13,6 +13,8 @@ const validStudy = {
   displayTimezone: "Asia/Manila",
   testingStartsAt: "2026-08-03T09:00:00+08:00",
   testingEndsAt: "2026-08-10T17:00:00+08:00",
+  pickupInstructions: "Use the main entrance as the pickup point.",
+  destinationInstructions: "Set the destination pin at the public entrance.",
 };
 
 function withoutStudyCode(study: typeof validStudy) {
@@ -102,6 +104,21 @@ describe("initial route validation", () => {
       platformServiceIds: [serviceA, serviceB],
       testerAServiceId: serviceA,
       testerBServiceId: serviceB,
+    }).success).toBe(false);
+  });
+
+  it("requires pickup and destination instructions", () => {
+    expect(createStudyWithRouteSchema.safeParse({
+      ...withoutStudyCode(validStudy),
+      pickupInstructions: "",
+      destinationInstructions: "",
+      searchCountryCode: "PH",
+      routeName: "Manila public route",
+      pickup,
+      destination: { ...pickup, label: "Public destination", latitude: 14.51, longitude: 121.01 },
+      platformServiceIds: [serviceA, serviceA],
+      testerAServiceId: serviceA,
+      testerBServiceId: serviceA,
     }).success).toBe(false);
   });
 

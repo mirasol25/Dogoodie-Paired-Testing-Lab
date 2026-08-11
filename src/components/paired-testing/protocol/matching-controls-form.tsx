@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
+import { ProtocolInfoTooltip } from "@/components/paired-testing/protocol/protocol-info-tooltip";
 import type { Json } from "@/types/database.types";
 
 type OptionalControlCode = "operating_system_family" | "app_version" | "device_model" | "network_category";
@@ -72,7 +73,7 @@ export function MatchingControlsForm({ studyId, protocolId, fixedControls, study
 
   return (
     <section className="space-y-5 border-t border-border pt-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><h2 className="mt-1.5 text-lg font-semibold">Matching controls</h2></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><div className="mt-1.5 flex items-center gap-1"><h2 className="text-lg font-semibold">Matching controls</h2><ProtocolInfoTooltip label="About matching controls">Matching controls keep the two tester observations comparable. Required controls must match; optional technical controls apply only when selected.</ProtocolInfoTooltip></div></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
 
       <div className="space-y-2"><h3 className="text-sm font-semibold">Required exact matches</h3><div className="divide-y divide-border rounded-md border border-border">{requiredControls.map(([label, detail]) => <div key={label} className="flex min-h-14 items-center gap-3 px-4 py-3"><Checkbox checked disabled /><ShieldCheck className="size-4 shrink-0 text-primary" /><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-muted-foreground">{detail}</span></span><Badge variant="outline">Exact</Badge></div>)}</div></div>
 

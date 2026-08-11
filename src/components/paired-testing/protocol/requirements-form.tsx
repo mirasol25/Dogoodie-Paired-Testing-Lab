@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol/protocol-draft-navigation";
+import { ProtocolInfoTooltip } from "@/components/paired-testing/protocol/protocol-info-tooltip";
 import type { Json } from "@/types/database.types";
 
 type ObservationCode = "estimated_arrival_time" | "availability" | "price_breakdown" | "tester_notes" | "app_version" | "device_model" | "operating_system_family" | "network_category" | "account_age_membership";
@@ -67,7 +68,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
 
   return (
     <section className="space-y-6 border-t border-border pt-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><h2 className="mt-1.5 text-lg font-semibold">Evidence and observation requirements</h2></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="label-kicker">Protocol configuration</p><div className="mt-1.5 flex items-center gap-1"><h2 className="text-lg font-semibold">Evidence and observation requirements</h2><ProtocolInfoTooltip label="About evidence and observation requirements">Defines the files each tester must provide and the observation data recorded with them. Required items are needed for a complete submission.</ProtocolInfoTooltip></div></div><Badge variant={dirty ? "outline" : "secondary"}>{dirty ? "Unsaved changes" : <><Check className="size-3" />Saved</>}</Badge></div>
 
       <div className="space-y-3"><div><h3 className="text-sm font-semibold">Required evidence</h3><p className="mt-1 text-xs text-muted-foreground">GPS is recorded in the tester observation and used for validation; it is not a separate evidence file.</p></div><div className="divide-y divide-border rounded-md border border-border"><EvidenceRequirement icon={Camera} label="Quote screenshot" detail="Uploaded by each tester." /><EvidenceRequirement icon={Film} label="Screen recording" detail="Uploaded by each tester." /><EvidenceRequirement icon={FileJson} label="System-generated metadata" detail="Created automatically from the uploaded files and submission record." /></div></div>
 
