@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity, BookOpen, ClipboardCheck, Columns2, FileArchive, FileText, History,
@@ -83,6 +84,29 @@ const roleLabels: Record<AppShellUser["role"], string> = {
   law_firm_viewer: "Law-Firm Viewer",
 };
 
+function SignOutButton({ compact = false }: { compact?: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      type="submit"
+      variant="ghost"
+      size={compact ? "icon-sm" : "sm"}
+      className={cn("text-muted-foreground hover:text-foreground", !compact && "w-full justify-start")}
+      disabled={pending}
+      aria-busy={pending}
+    >
+      {pending ? (
+        <span className="mr-1.5 inline-flex size-3.5 items-center justify-center" aria-hidden="true">
+          <span className="size-3 animate-spin rounded-full border-2 border-current border-r-transparent opacity-80" />
+        </span>
+      ) : (
+        <LogOut className="size-3.5" />
+      )}
+      {!compact ? (pending ? "Signing out..." : "Sign out") : <span className="sr-only">{pending ? "Signing out" : "Sign out"}</span>}
+    </Button>
+  );
+}
+
 const studyNavigation: Record<AppShellUser["role"], NavigationItem> = {
   admin: { label: "Study Management", href: "/studies", icon: "BookOpen" },
   test_coordinator: { label: "Study Management", href: "/studies", icon: "BookOpen" },
@@ -123,15 +147,7 @@ function AccountPanel({ user, compact = false }: { user: AppShellUser; compact?:
         </Button>
       ) : null}
       <form action={signOutAction} className={cn(!compact && "mt-3")}>
-        <Button
-          type="submit"
-          variant="ghost"
-          size={compact ? "icon-sm" : "sm"}
-          className={cn("text-muted-foreground hover:text-foreground", !compact && "w-full justify-start")}
-        >
-          <LogOut className="size-3.5" />
-          {!compact ? "Sign out" : <span className="sr-only">Sign out</span>}
-        </Button>
+        <SignOutButton compact={compact} />
       </form>
     </div>
   );

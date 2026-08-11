@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, LoaderCircle, Search } from "lucide-react";
+import { ArrowRight, LoaderCircle, Search } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -67,16 +67,12 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
       </div>
       <div className="divide-y divide-border">
         {visible.map(({ study, workload }) => {
-          const selected = study.id === activeStudyId;
           const actionLabel = ["completed", "archived"].includes(study.status) ? "View history" : "Open study";
           return (
-            <article key={study.id} className={selected ? "bg-primary/[0.04]" : undefined}>
+            <article key={study.id}>
               <div className={`grid gap-5 px-4 py-5 sm:px-5 md:grid-cols-2 xl:items-center xl:gap-4 ${rowGrid}`}>
                 <div className="min-w-0 md:col-span-2 xl:col-span-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold leading-5">{study.name}</h2>
-                    {selected ? <span className="flex items-center gap-1 text-[10px] text-primary"><Check className="size-3" />Selected</span> : null}
-                  </div>
+                  <h2 className="text-sm font-semibold leading-5">{study.name}</h2>
                   <p className="mono mt-1 text-[10px] text-muted-foreground">{study.study_code}</p>
                 </div>
                 <div>
@@ -98,7 +94,7 @@ export function TesterStudiesClient({ rows, activeStudyId }: { rows: TesterStudy
                   </div>
                 </div>
                 <div className="flex md:col-span-2 md:justify-end xl:col-span-1">
-                  <Button onClick={() => open(study)} disabled={pending} variant={selected ? "default" : "outline"} className="w-full sm:w-auto">
+                  <Button onClick={() => open(study)} disabled={pending} variant={workload.needsAction ? "default" : "outline"} className="w-full sm:w-auto">
                     {pendingId === study.id ? <LoaderCircle className="size-4 animate-spin" /> : actionLabel}
                     <ArrowRight className="size-4" />
                   </Button>

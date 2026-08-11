@@ -98,6 +98,17 @@ export async function listAccessibleStudies(
   return data;
 }
 
+export async function listStudyAssignmentCounts(studyIds: string[]): Promise<Record<string, number>> {
+  if (!studyIds.length) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("assignments").select("study_id").in("study_id", studyIds);
+  if (error) throw new StudyDataError("Study assignment counts could not be loaded.", "DATABASE");
+  return data.reduce<Record<string, number>>((counts, assignment) => {
+    counts[assignment.study_id] = (counts[assignment.study_id] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
 export async function getAccessibleStudyById(
   studyId: string,
   suppliedClient?: SupabaseClient<Database>,

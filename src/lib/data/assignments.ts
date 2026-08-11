@@ -31,6 +31,7 @@ export interface AssignmentSummary extends AssignmentRow {
   testers: AssignmentTesterSummary[];
   protocolFixedControls: Database["public"]["Tables"]["protocols"]["Row"]["fixed_controls"];
   protocolEvidenceRequirements: Database["public"]["Tables"]["protocols"]["Row"]["evidence_requirements"];
+  protocolValidationConfiguration: Database["public"]["Tables"]["protocols"]["Row"]["validation_configuration"];
 }
 
 export interface AssignmentRouteOption {
@@ -213,7 +214,7 @@ export async function listStudyAssignments(
   const supabase = suppliedClient ?? await createClient();
   const { data: assignments, error } = await supabase
     .from("assignments")
-    .select("*,protocols(protocol_code,version,fixed_controls,evidence_requirements)")
+    .select("*,protocols(protocol_code,version,fixed_controls,evidence_requirements,validation_configuration)")
     .eq("study_id", studyId)
     .order("scheduled_start", { ascending: false, nullsFirst: false });
 
@@ -252,6 +253,7 @@ export async function listStudyAssignments(
     protocolVersion: assignment.protocols.version,
     protocolFixedControls: assignment.protocols.fixed_controls,
     protocolEvidenceRequirements: assignment.protocols.evidence_requirements,
+    protocolValidationConfiguration: assignment.protocols.validation_configuration,
     testers: rosterResult.data
       .filter((entry) => entry.assignment_id === assignment.id)
       .map((entry) => {
@@ -376,6 +378,7 @@ export async function saveSubmissionDraft(input: SubmissionDraftInput): Promise<
     p_operating_system_version: parsed.data.operatingSystemVersion,
     p_app_version: parsed.data.appVersion,
     p_battery_percentage: parsed.data.batteryPercentage,
+    p_observation_data: parsed.data.observationData,
     p_notes: parsed.data.notes,
   });
   if (error) throw new AssignmentDataError(error.message || "The submission draft could not be saved.");

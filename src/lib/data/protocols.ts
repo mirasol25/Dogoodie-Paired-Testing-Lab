@@ -170,13 +170,17 @@ export async function saveProtocolRequirements(
 ): Promise<Protocol> {
   const parsed = saveProtocolRequirementsSchema.safeParse(input);
   if (!parsed.success) throw new ProtocolDataError(parsed.error.issues[0]?.message || "Invalid protocol requirements.");
+  const uniqueObservationFields = [...new Set(parsed.data.optionalObservationFields)];
+  if (uniqueObservationFields.length !== parsed.data.optionalObservationFields.length) {
+    throw new ProtocolDataError("Observation requirements cannot contain duplicates.");
+  }
 
   const supabase = suppliedClient ?? await createClient();
   const { data, error } = await supabase.rpc("save_protocol_evidence_observation_requirements", {
     p_study_id: parsed.data.studyId,
     p_protocol_id: parsed.data.protocolId,
     p_optional_evidence: parsed.data.optionalEvidence,
-    p_optional_observation_fields: parsed.data.optionalObservationFields,
+    p_optional_observation_fields: uniqueObservationFields,
   });
 
   if (error?.code === "42501") throw new ProtocolDataError("You are not authorized to edit this protocol.");

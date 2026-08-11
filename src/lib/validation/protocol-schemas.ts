@@ -95,6 +95,15 @@ export const saveProtocolRequirementsSchema = z.object({
   protocolId: z.string().uuid(),
   optionalEvidence: z.array(optionalEvidenceSchema).max(3),
   optionalObservationFields: z.array(optionalObservationFieldSchema).max(9),
+}).superRefine((value, context) => {
+  const unique = new Set(value.optionalObservationFields);
+  if (unique.size !== value.optionalObservationFields.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["optionalObservationFields"],
+      message: "Observation requirements cannot contain duplicates.",
+    });
+  }
 });
 
 export type SaveProtocolRequirementsInput = z.input<typeof saveProtocolRequirementsSchema>;

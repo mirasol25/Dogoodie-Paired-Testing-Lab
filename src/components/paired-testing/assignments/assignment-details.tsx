@@ -30,6 +30,32 @@ function timezoneOf(assignment: AssignmentSummary, fallback: string) {
   return typeof value.timezone === "string" ? value.timezone : fallback;
 }
 
+function protocolObservationFields(assignment: AssignmentSummary) {
+  const value = assignment.protocolValidationConfiguration;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const fields = (value as { observation_fields?: Array<{ code?: string; label?: string; required?: boolean; source?: string }> }).observation_fields;
+  const allowedAdditionalObservationCodes = new Set([
+    "estimated_arrival_time",
+    "availability",
+    "price_breakdown",
+    "tester_notes",
+    "app_version",
+    "battery_percentage",
+    "network_category",
+    "account_age_membership",
+  ]);
+  return Array.isArray(fields)
+    ? fields.filter((field): field is { code: string; label: string; required: boolean; source: string } => Boolean(
+      field &&
+      typeof field.code === "string" &&
+      typeof field.label === "string" &&
+      typeof field.source === "string" &&
+      field.source === "tester" &&
+      allowedAdditionalObservationCodes.has(field.code),
+    ))
+    : [];
+}
+
 function formatSchedule(value: string | null, timezone: string) {
   if (!value) return "Not scheduled";
   return new Intl.DateTimeFormat("en", { dateStyle: "long", timeStyle: "short", timeZone: timezone }).format(new Date(value));
@@ -77,7 +103,7 @@ export function AssignmentDetails({ study, assignment, routeGuidance, submission
     {!testerView ? <section className="space-y-3 border-t border-border pt-5"><div><p className="text-[10px] uppercase text-muted-foreground">Tester pair</p><h2 className="mt-1.5 text-base font-semibold">Assigned sides</h2></div><div className="grid gap-4 md:grid-cols-2"><TesterPanel side="Tester A" tester={testerA} own={testerA?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerA?.userId !== currentUserId} accent="primary" /><TesterPanel side="Tester B" tester={testerB} own={testerB?.userId === currentUserId} hideControls={Boolean(ownSlot) && testerB?.userId !== currentUserId} accent="amber" /></div></section> : null}
 
     {canManage && operations ? <OperationalProgress assignment={assignment} operations={operations} /> : null}
-    {ownTester?.status === "in_progress" && !ownSubmissionIsFinal && workflow ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} workflow={workflow} partnerName={partnerTester?.displayName ?? "your partner"} routeGuidance={routeGuidance} /> : null}
+    {ownTester?.status === "in_progress" && !ownSubmissionIsFinal && workflow ? <TesterSubmissionForm study={study} assignment={assignment} ownSlot={ownTester} submission={submission} technicalProfile={technicalProfile} evidence={evidence} initialScreenshotValidation={screenshotValidation} screenshotPreviewUrl={screenshotPreviewUrl} timezone={timezone} workflow={workflow} partnerName={partnerTester?.displayName ?? "your partner"} routeGuidance={routeGuidance} protocolObservationFields={protocolObservationFields(assignment)} /> : null}
   </div>;
 }
 

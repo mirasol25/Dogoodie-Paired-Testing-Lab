@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth/server";
 import { AssignmentDataError, cancelAssignment, completeAssignmentCaptureChecklist, confirmAssignmentReady, registerSubmissionEvidence, saveSubmissionDraft, startAssignmentTest, submitTesterObservation } from "@/lib/data/assignments";
 import { requireRole } from "@/lib/auth/server";
-import { confirmScreenshotCandidateSelection, detectTimeCandidateFromRegion, ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
+import { addRideCandidateFromRegion, confirmScreenshotCandidateSelection, detectTimeCandidateFromRegion, ensureScreenshotDraft, processScreenshotEvidence, ScreenshotOCRError } from "@/lib/data/screenshot-ocr";
 import type { NormalizedBounds, ScreenshotCandidateSelections } from "@/lib/screenshot-ocr/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { submissionDraftClientSchema } from "@/lib/validation/submission-schemas";
@@ -173,6 +173,16 @@ export async function detectScreenshotTimeRegionAction(validationId: string, bou
     return { ok: true as const, message: "Highlighted time detected.", candidate };
   } catch (error) {
     return { ok: false as const, message: error instanceof ScreenshotOCRError ? error.message : "The highlighted time could not be detected." };
+  }
+}
+
+export async function addScreenshotRideRegionAction(validationId: string, bounds: NormalizedBounds) {
+  const identity = await requireActiveUser("/paired-testing-demo/assignments");
+  try {
+    const candidate = await addRideCandidateFromRegion(validationId, bounds, identity.user.id);
+    return { ok: true as const, message: "Highlighted ride card saved.", candidate };
+  } catch (error) {
+    return { ok: false as const, message: error instanceof ScreenshotOCRError ? error.message : "The highlighted ride card could not be saved." };
   }
 }
 

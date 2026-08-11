@@ -11,7 +11,7 @@ import { useProtocolDraftNavigation } from "@/components/paired-testing/protocol
 import { ProtocolInfoTooltip } from "@/components/paired-testing/protocol/protocol-info-tooltip";
 import type { Json } from "@/types/database.types";
 
-type ObservationCode = "estimated_arrival_time" | "availability" | "price_breakdown" | "tester_notes" | "app_version" | "device_model" | "operating_system_family" | "network_category" | "account_age_membership";
+type ObservationCode = "estimated_arrival_time" | "availability" | "price_breakdown" | "tester_notes" | "app_version" | "battery_percentage" | "network_category" | "account_age_membership";
 
 const requiredObservationFields = [
   "Provider", "Normalized service category", "Displayed price", "Currency", "Pickup and destination",
@@ -24,8 +24,7 @@ const observationOptions: Array<{ code: ObservationCode; label: string }> = [
   { code: "price_breakdown", label: "Price breakdown" },
   { code: "tester_notes", label: "Tester notes" },
   { code: "app_version", label: "App version" },
-  { code: "device_model", label: "Device model" },
-  { code: "operating_system_family", label: "Operating-system family" },
+  { code: "battery_percentage", label: "Battery percentage" },
   { code: "network_category", label: "Network category" },
   { code: "account_age_membership", label: "Account age or membership status" },
 ];
@@ -39,9 +38,15 @@ function observationConfiguration(configuration: Json): Json {
   return configuration && typeof configuration === "object" && !Array.isArray(configuration) ? configuration.observation_fields ?? null : null;
 }
 
+function uniqueObservationCodes(codes: ObservationCode[]) {
+  return [...new Set(codes)];
+}
+
 export function RequirementsForm({ studyId, protocolId, evidenceRequirements, validationConfiguration, fixedControls }: { studyId: string; protocolId: string; evidenceRequirements: Json; validationConfiguration: Json; fixedControls: Json }) {
   const forcedTechnical = new Set(codesFromArray(fixedControls).filter((code) => observationOptions.some((option) => option.code === code)) as ObservationCode[]);
-  const existingObservations = codesFromArray(observationConfiguration(validationConfiguration)).filter((code) => observationOptions.some((option) => option.code === code) && !forcedTechnical.has(code as ObservationCode)) as ObservationCode[];
+  const existingObservations = uniqueObservationCodes(
+    codesFromArray(observationConfiguration(validationConfiguration)).filter((code) => observationOptions.some((option) => option.code === code) && !forcedTechnical.has(code as ObservationCode)) as ObservationCode[],
+  );
   const initiallyConfigured = codesFromArray(evidenceRequirements).includes("screenshot") && codesFromArray(evidenceRequirements).includes("screen_recording") && Array.isArray(observationConfiguration(validationConfiguration));
   const [observations, setObservations] = useState(existingObservations);
   const [savedObservations, setSavedObservations] = useState(existingObservations);
@@ -51,7 +56,7 @@ export function RequirementsForm({ studyId, protocolId, evidenceRequirements, va
   const dirty = !configured || [...observations].sort().join(",") !== [...savedObservations].sort().join(",");
 
   function toggleObservation(code: ObservationCode, checked: boolean) {
-    setObservations((current) => checked ? [...current, code] : current.filter((item) => item !== code));
+    setObservations((current) => checked ? uniqueObservationCodes([...current, code]) : current.filter((item) => item !== code));
   }
 
   function save() {

@@ -272,32 +272,32 @@ export function DashboardClient({
           type="bar"
         />
       </section>
-      <section className={viewerMode ? "grid gap-3" : "grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]"}>
-        <div className="overflow-hidden rounded-md border border-border">
-          <div className="flex items-center justify-between border-b border-border bg-card/35 px-4 py-3">
+      <section className={viewerMode ? "grid gap-3" : "grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_360px]"}>
+        <div className="flex h-[540px] flex-col overflow-hidden rounded-md border border-border bg-background">
+          <div className="flex items-center justify-between border-b border-border bg-card/25 px-4 py-3">
             <div>
               <p className="text-[10px] uppercase text-primary">{viewerMode ? "Released results" : "Review queue"}</p>
-              <h2 className="mt-1 text-base font-semibold">
+              <h2 className="mt-1 text-sm font-semibold text-foreground">
                 {viewerMode ? "Included matched pairs" : "Recent matched pairs"}
               </h2>
             </div>
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm" className="shrink-0">
               <Link href="/paired-testing-demo/pairs">
                 View all
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
           </div>
-          <div className="divide-y divide-border">
+          <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border">
             {pairs.slice(0, 5).map((pair) => (
               <Link
                 key={pair.id}
                 href={`/paired-testing-demo/pairs/${pair.id}`}
-                className="grid gap-2 px-4 py-3 hover:bg-secondary sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                className="grid gap-3 px-4 py-4 transition-colors hover:bg-secondary/40 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
               >
-                <div>
-                  <p className="mono text-xs font-semibold">{pair.pair_code}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                <div className="min-w-0">
+                  <p className="mono text-xs font-semibold text-foreground">{pair.pair_code}</p>
+                  <p className="mt-1 truncate text-[10px] text-muted-foreground">
                     {pair.submissionA.testerName} /{" "}
                     {pair.submissionB.testerName}
                   </p>
@@ -313,17 +313,17 @@ export function DashboardClient({
             ) : null}
           </div>
         </div>
-        {!viewerMode ? <aside className="overflow-hidden rounded-md border border-border">
-          <div className="border-b border-border bg-card/35 px-4 py-3">
+        {!viewerMode ? <aside className="flex h-[540px] flex-col overflow-hidden rounded-md border border-border bg-background">
+          <div className="border-b border-border bg-card/25 px-4 py-3">
             <p className="text-[10px] uppercase text-primary">
               Operational history
             </p>
-            <h2 className="mt-1 text-base font-semibold">Recent activity</h2>
+            <h2 className="mt-1 text-sm font-semibold text-foreground">Recent activity</h2>
           </div>
-          <div className="divide-y divide-border">
+          <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border">
             {recentActivity.map((event) => (
-              <div key={event.id} className="px-4 py-3">
-                <p className="text-xs font-medium">
+              <div key={event.id} className="px-4 py-4">
+                <p className="text-xs font-medium leading-5 text-foreground">
                   {event.action.replaceAll(".", " ")}
                 </p>
                 <p className="mt-1 text-[10px] text-muted-foreground">

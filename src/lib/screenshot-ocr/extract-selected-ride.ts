@@ -73,6 +73,8 @@ export async function extractSelectedRide(image: Buffer, platformSlug: string): 
   if (!selectedRideLabel) warnings.push("Selected ride label could not be read.");
   const normalize = (bbox: { x0: number; y0: number; x1: number; y1: number }) => ({ x: (bbox.x0 * layoutScale) / width, y: (bbox.y0 * layoutScale) / height, width: ((bbox.x1 - bbox.x0) * layoutScale) / width, height: ((bbox.y1 - bbox.y0) * layoutScale) / height });
   const candidates: ScreenshotCandidate[] = [];
+  const rideLabelPattern = /[a-z]{2}/i;
+  const excludedRideTextPattern = /\b(?:min|mins|away|book|offer|promo|invite|save|current\s+location|destination|arrive|pickup|cash|card)\b/i;
   layout.lines.forEach((line, index) => {
     const bounds = normalize(line.bbox);
     const lineFare = parseSelectedFare(line.text);
@@ -81,7 +83,7 @@ export async function extractSelectedRide(image: Buffer, platformSlug: string): 
     if (lineTime) candidates.push({ id: `time-${index}`, type: "time", text: line.text, displayValue: lineTime, parsedValue: lineTime, bounds });
     const battery = bounds.y < 0.13 && bounds.x > 0.62 ? parseBatteryPercentage(line.text) : null;
     if (battery !== null) candidates.push({ id: `battery-${index}`, type: "battery", text: line.text, displayValue: `${battery}%`, parsedValue: battery, bounds });
-    if (bounds.y > 0.35 && /[a-z]{2}/i.test(line.text) && !lineFare && !/\b(?:min|mins|away|book|offer|promo|invite|save)\b/i.test(line.text)) {
+    if (bounds.y > 0.28 && rideLabelPattern.test(line.text) && !lineFare && !excludedRideTextPattern.test(line.text)) {
       const y = Math.max(0, bounds.y - 0.025);
       candidates.push({ id: `ride-${index}`, type: "ride_card", text: line.text, displayValue: line.text, parsedValue: line.text, bounds: { x: 0.025, y, width: 0.95, height: Math.min(0.14, 1 - y) } });
     }

@@ -27,7 +27,7 @@ begin
     or selected_submission.quote_timestamp is null or selected_submission.latitude is null or selected_submission.longitude is null
     or selected_submission.network_type is null or selected_submission.device_type is null
     or selected_submission.operating_system is null or selected_submission.operating_system_version is null
-    or selected_submission.app_version is null or selected_submission.battery_percentage is null then
+    or selected_submission.app_version is null then
     raise exception 'Complete the observation before submitting' using errcode = '22023';
   end if;
   if selected_submission.quote_timestamp < selected_assignment.scheduled_start or selected_submission.quote_timestamp > selected_assignment.scheduled_end then

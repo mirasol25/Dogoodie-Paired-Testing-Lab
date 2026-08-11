@@ -54,6 +54,11 @@ export default async function StudyOverviewPage({ params }: PageProps<"/paired-t
   const pendingReviews = pairs.filter((pair) => pair.reviewStatus === "pending").length;
   const reviewedPairs = pairs.length - pendingReviews;
   const acceptedPairs = pairs.filter((pair) => pair.reviewStatus === "accepted").length;
+  const acceptedUsablePairs = pairs.filter((pair) =>
+    pair.reviewStatus === "accepted"
+    && pair.evidence_status === "complete"
+    && (["valid", "warning"].includes(pair.technical_status) || pair.reviewTechnicalException)
+  ).length;
   const workspaceLinks = [
     { label: "Protocol", detail: "Method and requirements", path: "protocol", icon: ClipboardCheck, roles: ["admin", "test_coordinator", "expert_reviewer", "law_firm_viewer"] },
     { label: "Assignments", detail: "Collection schedule", path: "assignments", icon: CalendarDays, roles: ["admin", "test_coordinator", "tester"] },
@@ -92,9 +97,14 @@ export default async function StudyOverviewPage({ params }: PageProps<"/paired-t
         <StudyServiceContext study={study} services={serviceOptions} className="mt-4" />
       </section>
 
-      <section className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Assignments" value={assignments.length} detail={`${completedAssignments} completed`} />
         <Metric label="Matched pairs" value={pairs.length} detail={`${reviewedPairs} reviewed`} />
+        <Metric
+          label="Accepted usable pairs"
+          value={study.target_pair_count ? `${acceptedUsablePairs} / ${study.target_pair_count}` : acceptedUsablePairs}
+          detail={study.target_pair_count ? "Counted toward target" : "Accepted for completion"}
+        />
         {isViewer
           ? <Metric label="Accepted pairs" value={acceptedPairs} detail="Included after expert review" />
           : <Metric label="Pending review" value={pendingReviews} detail="Awaiting reviewer decision" />}

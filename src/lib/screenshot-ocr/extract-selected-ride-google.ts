@@ -28,6 +28,8 @@ export async function extractSelectedRideWithGoogle(image: Buffer, platformSlug:
   const statusBarRawText = topLines.filter((line) => line.bbox.x0 / width < 0.5).map((line) => line.text).join(" ");
   const batteryRawText = topLines.filter((line) => line.bbox.x0 / width > 0.62).map((line) => line.text).join(" ");
   const candidates: ScreenshotCandidate[] = [];
+  const rideLabelPattern = /[a-z]{2}/i;
+  const excludedRideTextPattern = /\b(?:min|mins|away|book|offer|promo|invite|save|current\s+location|destination|arrive|pickup|cash|card)\b/i;
 
   recognized.lines.forEach((line, index) => {
     const bounds = normalize(line.bbox);
@@ -37,7 +39,8 @@ export async function extractSelectedRideWithGoogle(image: Buffer, platformSlug:
     if (lineTime) candidates.push({ id: `time-${index}`, type: "time", text: line.text, displayValue: lineTime, parsedValue: lineTime, bounds });
     const battery = bounds.y < 0.13 && bounds.x > 0.62 ? parseBatteryPercentage(line.text) : null;
     if (battery !== null) candidates.push({ id: `battery-${index}`, type: "battery", text: line.text, displayValue: `${battery}%`, parsedValue: battery, bounds });
-    if (inSelectedCard(line.bbox) && /[a-z]{2}/i.test(line.text) && !lineFare && !/\b(?:min|mins|away|book|offer|promo|invite|save)\b/i.test(line.text)) {
+    const possibleRideLabel = rideLabelPattern.test(line.text) && !lineFare && !excludedRideTextPattern.test(line.text);
+    if (possibleRideLabel && (inSelectedCard(line.bbox) || bounds.y > 0.28)) {
       const y = Math.max(0, bounds.y - 0.025);
       candidates.push({ id: `ride-${index}`, type: "ride_card", text: cleanRideLabel(line.text), displayValue: cleanRideLabel(line.text), parsedValue: cleanRideLabel(line.text), bounds: { x: 0.025, y, width: 0.95, height: Math.min(0.14, 1 - y) } });
     }

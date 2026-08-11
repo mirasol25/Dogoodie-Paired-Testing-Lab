@@ -1001,6 +1001,7 @@ export type Database = {
           longitude: number | null
           network_type: string | null
           notes: string | null
+          observation_data: Json
           operating_system: string | null
           operating_system_version: string | null
           pickup_location: string | null
@@ -1029,6 +1030,7 @@ export type Database = {
           longitude?: number | null
           network_type?: string | null
           notes?: string | null
+          observation_data?: Json
           operating_system?: string | null
           operating_system_version?: string | null
           pickup_location?: string | null
@@ -1057,6 +1059,7 @@ export type Database = {
           longitude?: number | null
           network_type?: string | null
           notes?: string | null
+          observation_data?: Json
           operating_system?: string | null
           operating_system_version?: string | null
           pickup_location?: string | null
@@ -1352,15 +1355,16 @@ export type Database = {
       }
       save_submission_draft: {
         Args: {
-          p_app_version: string
+          p_app_version: string | null
           p_assignment_id: string
-          p_battery_percentage: number
+          p_battery_percentage?: number | null
           p_device_type: string
           p_displayed_fare: number
           p_latitude: number
           p_longitude: number
-          p_network_type: string
+          p_network_type: string | null
           p_notes?: string | null
+          p_observation_data?: Json
           p_operating_system: string
           p_operating_system_version: string
           p_quote_timestamp: string

@@ -210,7 +210,7 @@ export function AccountsManager({
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email, role, or status" className="pl-9" />
           </div>
           <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as AppRole | "all")}><SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger><SelectContent><SelectItem value="all">All roles</SelectItem>{Object.entries(roleLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as AccountStatus | "all")}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as AccountStatus | "all")}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="disabled">Disabled</SelectItem></SelectContent></Select>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-muted-foreground">{filtered.length} of {accounts.length} accounts</p>

@@ -169,6 +169,35 @@ export async function detectTimeCandidateFromRegion(validationId: string, bounds
   return candidate;
 }
 
+export async function addRideCandidateFromRegion(validationId: string, bounds: NormalizedBounds, userId: string): Promise<ScreenshotCandidate> {
+  const values = [bounds.x, bounds.y, bounds.width, bounds.height];
+  if (values.some((value) => !Number.isFinite(value)) || bounds.x < 0 || bounds.y < 0 || bounds.width < 0.02 || bounds.height < 0.01 || bounds.x + bounds.width > 1 || bounds.y + bounds.height > 1) {
+    throw new ScreenshotOCRError("Draw a box around the selected ride card.");
+  }
+  const supabase = await createClient();
+  const db = supabase as unknown as { from: (table: string) => any };
+  const { data: validation } = await db.from("screenshot_ocr_validations").select("*").eq("id", validationId).eq("is_active", true).maybeSingle();
+  if (!validation) throw new ScreenshotOCRError("The screenshot candidates are no longer available.");
+  const { data: evidence } = await db.from("evidence_files").select("uploaded_by").eq("id", validation.evidence_file_id).eq("uploaded_by", userId).maybeSingle();
+  if (!evidence) throw new ScreenshotOCRError("The screenshot evidence is unavailable.");
+  const { data: service } = await db.from("platform_services").select("id,name").eq("id", validation.expected_platform_service_id).maybeSingle();
+  if (!service?.id || !service.name) throw new ScreenshotOCRError("The expected ride service could not be loaded.");
+  const candidate: ScreenshotCandidate = {
+    id: `ride-highlight-${crypto.randomUUID()}`,
+    type: "ride_card",
+    text: service.name,
+    displayValue: service.name,
+    parsedValue: service.name,
+    platformServiceId: service.id,
+    bounds,
+  };
+  const candidates = [...(validation.candidates as ScreenshotCandidate[]), candidate];
+  const admin = createAdminClient() as unknown as { from: (table: string) => any };
+  const { error: updateError } = await admin.from("screenshot_ocr_validations").update({ candidates }).eq("id", validationId).eq("is_active", true);
+  if (updateError) throw new ScreenshotOCRError("The highlighted ride card could not be saved.");
+  return candidate;
+}
+
 export async function confirmScreenshotCandidateSelection(validationId: string, selections: ScreenshotCandidateSelections, userId: string): Promise<ScreenshotValidationResult> {
   const supabase = await createClient();
   const db = supabase as unknown as { from: (table: string) => any };

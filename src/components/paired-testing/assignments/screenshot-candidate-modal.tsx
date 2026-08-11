@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, Crosshair, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { confirmScreenshotCandidatesAction, detectScreenshotTimeRegionAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
+import { addScreenshotRideRegionAction, confirmScreenshotCandidatesAction, detectScreenshotTimeRegionAction } from "@/app/paired-testing-demo/assignments/[assignmentId]/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { NormalizedBounds, ScreenshotCandidate, ScreenshotCandidateSelections, ScreenshotCandidateType, ScreenshotValidationResult } from "@/lib/screenshot-ocr/schemas";
@@ -24,6 +24,12 @@ function fareIsInsideRide(fare: ScreenshotCandidate, ride: ScreenshotCandidate) 
   const center = { x: fare.bounds.x + fare.bounds.width / 2, y: fare.bounds.y + fare.bounds.height / 2 };
   return center.x >= ride.bounds.x - 0.03 && center.x <= ride.bounds.x + ride.bounds.width + 0.03
     && center.y >= ride.bounds.y - 0.03 && center.y <= ride.bounds.y + ride.bounds.height + 0.03;
+}
+
+function boundsOverlap(a: NormalizedBounds, b: NormalizedBounds) {
+  const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return xOverlap * yOverlap;
 }
 
 function suggestedSelections(validation: ScreenshotValidationResult): Partial<ScreenshotCandidateSelections> {
@@ -115,20 +121,61 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
     event.currentTarget.releasePointerCapture(event.pointerId);
     setDrawStart(null);
     if (drawBounds.width < 0.02 || drawBounds.height < 0.01) return toast.error("Draw a box around the complete status-bar time.");
-    startDetection(async () => {
-      const result = await detectScreenshotTimeRegionAction(validation.validationId, drawBounds);
-      if (!result.ok || !result.candidate) { toast.error(result.message); return; }
-      setCandidates((current) => [...current, result.candidate]);
-      if (result.candidate.validationStatus === "invalid") {
-        toast.error(result.candidate.validationMessage || "The highlighted time is outside this test attempt.");
-        return;
-      }
-      setSelections((current) => ({ ...current, timeCandidateId: result.candidate.id }));
-      setDrawing(false);
-      setDrawBounds(null);
-      setEditing(null);
-      toast.success("Screenshot time detected from the highlighted area.");
-    });
+    if (editing === "time") {
+      startDetection(async () => {
+        const result = await detectScreenshotTimeRegionAction(validation.validationId, drawBounds);
+        if (!result.ok || !result.candidate) { toast.error(result.message); return; }
+        setCandidates((current) => [...current, result.candidate]);
+        if (result.candidate.validationStatus === "invalid") {
+          toast.error(result.candidate.validationMessage || "The highlighted time is outside this test attempt.");
+          return;
+        }
+        setSelections((current) => ({ ...current, timeCandidateId: result.candidate.id }));
+        setDrawing(false);
+        setDrawBounds(null);
+        setEditing(null);
+        toast.success("Screenshot time detected from the highlighted area.");
+      });
+      return;
+    }
+
+    if (editing === "ride_card") {
+      startDetection(async () => {
+        const result = await addScreenshotRideRegionAction(validation.validationId, drawBounds);
+        if (!result.ok || !result.candidate) { toast.error(result.message); return; }
+        setCandidates((current) => [...current, result.candidate]);
+        setSelections((current) => ({
+          ...current,
+          rideCardCandidateId: result.candidate.id,
+          fareCandidateId: candidates.find((item) => item.type === "fare" && fareIsInsideRide(item, result.candidate))?.id ?? current.fareCandidateId,
+        }));
+        setDrawing(false);
+        setDrawBounds(null);
+        setEditing(null);
+        toast.info(`Highlighted ride OCR value: ${result.candidate.displayValue}`);
+        toast.success("Ride card set from the highlighted area.");
+      });
+      return;
+    }
+
+    const bestCandidate = choices
+      .map((candidate) => ({ candidate, score: boundsOverlap(drawBounds, candidate.bounds) }))
+      .sort((left, right) => right.score - left.score)[0]?.candidate;
+    if (!bestCandidate || boundsOverlap(drawBounds, bestCandidate.bounds) <= 0) {
+      toast.error(`No ${editing === "ride_card" ? "ride" : "fare"} value matched that highlighted area.`);
+      return;
+    }
+    if (editing === "ride_card") toast.info(`Highlighted ride OCR value: ${bestCandidate.displayValue}`);
+    if (editing === "fare") toast.info(`Highlighted fare OCR value: ${bestCandidate.displayValue}`);
+    if (isInvalid(bestCandidate)) {
+      toast.error(bestCandidate.validationMessage || `The highlighted ${editing === "ride_card" ? "ride" : "fare"} value is not available for this test attempt.`);
+      return;
+    }
+    choose(bestCandidate);
+    setDrawing(false);
+    setDrawBounds(null);
+    setEditing(null);
+    toast.success(`${editing === "ride_card" ? "Ride" : "Fare"} selected from the highlighted area.`);
   }
 
   function confirm() {
@@ -143,12 +190,13 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
 
   const complete = selected.every((field) => field.candidate && !isInvalid(field.candidate));
   const editingField = fields.find((field) => field.type === editing);
+  const highlightLabel = editing === "ride_card" ? "Highlight ride on screenshot" : editing === "fare" ? "Highlight fare on screenshot" : "Highlight time on screenshot";
 
   return <Dialog open={open} onOpenChange={pending ? undefined : changeOpen}>
     <DialogContent className="flex max-h-[96dvh] flex-col overflow-hidden p-0 sm:max-w-5xl">
       <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 sm:px-6 sm:py-4">
         <DialogTitle>Confirm screenshot details</DialogTitle>
-        <DialogDescription>Compare the highlighted screenshot with the detected values below. Change only an incorrect value.</DialogDescription>
+        <DialogDescription>Check the ride tier, fare, and phone status-bar time against the screenshot before continuing.</DialogDescription>
       </DialogHeader>
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(220px,38dvh)_auto] overflow-y-auto lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)] lg:grid-rows-1 lg:overflow-hidden">
@@ -167,8 +215,8 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
 
         <div className="space-y-3 p-3 sm:p-4 lg:overflow-y-auto lg:p-5">
           <div className="rounded-md border border-primary/30 bg-primary/[0.05] px-3 py-2.5 text-xs leading-5">
-            <p className="font-semibold text-primary">Detected from your screenshot</p>
-            <p className="mt-0.5 text-muted-foreground">Each confirmed value stays linked to its highlighted OCR region.</p>
+            <p className="font-semibold text-primary">How to confirm</p>
+            <p className="mt-0.5 text-muted-foreground">Use the values detected from the screenshot. If one is wrong or missing, choose <span className="font-semibold text-foreground">Change</span>, then select a detected value or draw over the correct area in the screenshot.</p>
           </div>
 
           <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
@@ -183,10 +231,13 @@ export function ScreenshotCandidateModal({ open, onOpenChange, imageUrl, validat
           </div>
 
           {editing ? <div className="space-y-3 rounded-md border border-border p-3">
-            <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">Change {editingField?.title.toLowerCase()}</p><p className="mt-1 text-xs text-muted-foreground">Select a detected value below or tap its box in the screenshot.</p></div><Button type="button" size="icon-sm" variant="ghost" title="Cancel change" onClick={() => setEditing(null)}><RotateCcw className="size-4" /></Button></div>
+            <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">Change {editingField?.title.toLowerCase()}</p><p className="mt-1 text-xs text-muted-foreground">{editing === "ride_card" ? "Select a detected ride, or draw around the full selected ride card including the label and fare." : editing === "fare" ? "Select the fare shown on the selected ride card. The fare must be inside the selected ride card area." : "Select a detected phone status-bar time, or draw tightly around the time at the top of the screenshot."}</p></div><Button type="button" size="icon-sm" variant="ghost" title="Cancel change" onClick={() => setEditing(null)}><RotateCcw className="size-4" /></Button></div>
             <div className="space-y-2">{choices.map((candidate) => { const invalid = isInvalid(candidate); return <button key={candidate.id} type="button" disabled={invalid} onClick={() => choose(candidate)} className="flex min-h-10 w-full items-start justify-between gap-3 rounded-md border border-border px-3 py-2 text-left text-xs enabled:hover:border-primary/60 disabled:cursor-not-allowed disabled:opacity-60"><span className="min-w-0"><span className="block truncate">{candidate.displayValue}</span>{invalid && candidate.validationMessage ? <span className="mt-1 block text-[10px] leading-4 text-red-200">{candidate.validationMessage}</span> : null}</span><span className="shrink-0 pt-0.5 text-muted-foreground">{invalid ? "Unavailable" : "Select"}</span></button>; })}</div>
             {!choices.length ? <p className="text-xs leading-5 text-amber-200">No value was detected. Replace the screenshot with a clearer full-screen image.</p> : choices.every(isInvalid) ? <p className="text-xs leading-5 text-amber-200">A value was detected, but it is outside the valid test attempt. Use a screenshot captured during the assigned window and upload it promptly.</p> : null}
-            {editing === "time" ? <Button type="button" variant={drawing ? "default" : "outline"} className="w-full" disabled={detecting} onClick={() => { setDrawing((value) => !value); setDrawBounds(null); }}>{detecting ? <LoaderCircle className="size-4 animate-spin" /> : <Crosshair className="size-4" />}{detecting ? "Reading highlighted area..." : drawing ? "Drag over the time above" : "Highlight time on screenshot"}</Button> : null}
+            {editing ? <Button type="button" variant={drawing ? "default" : "outline"} className="w-full" disabled={detecting} onClick={() => {
+              setDrawing((value) => !value);
+              setDrawBounds(null);
+            }}>{detecting ? <LoaderCircle className="size-4 animate-spin" /> : <Crosshair className="size-4" />}{editing === "time" ? (detecting ? "Reading highlighted area..." : drawing ? "Drag over the time above" : "Highlight time on screenshot") : highlightLabel}</Button> : null}
           </div> : null}
 
           {!complete ? <div className="rounded-md border border-amber-400/35 bg-amber-400/[0.06] p-3 text-xs leading-5 text-amber-100"><p className="font-semibold">Some required values need attention</p><p className="mt-1">Choose a valid detected value. If none is available, close this review and replace the screenshot.</p></div> : null}
