@@ -4,6 +4,8 @@ An internal, database-backed workspace for controlled paired rideshare pricing s
 
 The application produces descriptive study records. It does not determine discrimination, causation, intent, liability, statistical significance, scientific validity, or legal admissibility.
 
+**Deployed application:** [https://pairedtesting-lab.vercel.app/](https://pairedtesting-lab.vercel.app/)
+
 ## Core workflow
 
 1. An administrator invites internal accounts and assigns global roles.
@@ -21,6 +23,7 @@ Submitted observations are locked. An administrator can reopen one with a mandat
 
 - Next.js 16, React 19, strict TypeScript, Tailwind CSS 4, and shadcn/ui
 - Supabase Auth, Postgres, Row Level Security, and private Storage
+- Google Cloud Vision OCR with persisted job status, retries, and tester-confirmed candidates
 - Zod, React Hook Form, MapLibre GL, Recharts, Vitest, and ESLint
 
 ## Local setup
@@ -36,6 +39,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY=sb_secret_YOUR_SERVER_ONLY_KEY
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+OCR_PROVIDER=google
+GOOGLE_CLOUD_PROJECT_ID=YOUR_GOOGLE_CLOUD_PROJECT_ID
+GOOGLE_CLOUD_CLIENT_EMAIL=YOUR_SERVICE_ACCOUNT_EMAIL
+GOOGLE_CLOUD_PRIVATE_KEY="YOUR_SERVICE_ACCOUNT_PRIVATE_KEY"
 ```
 
 Apply every ordered SQL file under `supabase/migrations`, then run:

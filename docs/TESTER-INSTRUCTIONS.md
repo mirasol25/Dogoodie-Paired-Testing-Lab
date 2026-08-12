@@ -1,5 +1,8 @@
 # Tester Instructions
 
+**Last updated:** 12 August 2026<br>
+**Application:** [https://pairedtesting-lab.vercel.app/](https://pairedtesting-lab.vercel.app/)
+
 Use this guide when setting up your account and completing a paired-testing assignment. Follow only the condition shown on your side, coordinate timing with your assigned partner, and never book the ride.
 
 ## 1. Accept your email invitation
@@ -38,8 +41,8 @@ If you forget your password, use **Forgot password** on the sign-in page.
 ## 2. Open and review your assignment
 
 1. Sign in to the Paired Testing Lab.
-2. Open **Assignments**.
-3. Select the assignment you need to perform.
+2. Open **Assigned Studies** and select the correct study.
+3. Open its featured **Next assignment** or the **Assignments** tab.
 4. Carefully review:
 
    - Scheduled testing window
@@ -65,7 +68,7 @@ Verify that:
 - You understand the coordinator's instructions.
 - You are both ready to follow the coordinated start cue.
 
-Check every readiness item and click **Confirm ready**.
+When the testing window opens, click **I'm ready**.
 
 Wait until your partner has also confirmed readiness. When both testers show **Ready**, agree on the start cue and use the **Start test** control as instructed.
 
@@ -94,7 +97,22 @@ After both testers are ready:
 
 The screenshot and screen recording must come from the same test attempt.
 
-## 5. Upload your evidence
+## 5. Complete the capture checklist and unlock uploads
+
+After the test starts, the application displays the authoritative route, assigned service, capture steps, and an optional video tutorial.
+
+Confirm all six items:
+
+- Correct pickup and destination were entered.
+- Correct provider and assigned ride tier were selected.
+- Screen recording started before requesting the quote.
+- Fare and device time are visible.
+- Full-screen quote screenshot was captured.
+- Screen recording was stopped and saved.
+
+Select **Unlock evidence upload**. The screenshot and recording controls remain locked until every item is confirmed.
+
+## 6. Upload your evidence
 
 Upload both required files:
 
@@ -111,9 +129,11 @@ The screenshot must clearly display:
 - Displayed fare
 - Phone status-bar time
 
-## 6. Confirm the detected screenshot details
+## 7. Wait for OCR and confirm the detected screenshot details
 
-After uploading the screenshot, the system will open a screenshot review window. You must select three detected boxes.
+After uploading the screenshot, the application may display **Screenshot uploaded — waiting for OCR** or **Processing screenshot OCR**. Google Cloud Vision processes the stored screenshot, and temporary failures are retried automatically. You may upload the screen recording while OCR is processing.
+
+When processing finishes, the screenshot review window opens. You must select three detected boxes.
 
 ### Selected ride
 
@@ -137,7 +157,9 @@ You can select a value by clicking either:
 
 The selected values cannot be manually typed or edited because they must come directly from the screenshot.
 
-### When screenshot validation fails
+### When screenshot processing or validation fails
+
+If OCR remains queued or processing, keep the page open or return to the assignment later. The job status is stored. If processing fails after three attempts, record the exact error and contact the coordinator; do not repeatedly replace a valid screenshot merely to restart processing.
 
 The system validates each selection immediately. You cannot continue when:
 
@@ -157,11 +179,17 @@ If any required value has no correct choice:
 
 The screenshot and recording must always represent the same test attempt.
 
-## 7. Complete the remaining session details
+## 8. Wait for your partner's evidence
+
+After your screenshot is confirmed and your recording is uploaded, the application shows that your evidence is complete. Final session details remain closed until your partner also completes their screenshot confirmation and recording.
+
+Do not share or compare fares while waiting. You may safely leave and return to the assignment.
+
+## 9. Complete the remaining session details
 
 After the screenshot is confirmed, the detected fare and timestamp are automatically filled and locked. You cannot manually edit those two values.
 
-Complete the remaining fields:
+Complete the fields required by the active protocol. These may include:
 
 - Battery percentage from 0 to 100
 - Current location using **Use my location**
@@ -171,7 +199,9 @@ Complete the remaining fields:
 
 Make sure the battery, location, network, and app version describe the device and connection used for that specific test.
 
-## 8. Save your draft
+Not every field is required in every study. Follow the required markers shown in the application.
+
+## 10. Save your draft
 
 Click **Save draft** after completing the required information.
 
@@ -201,7 +231,7 @@ The browser's file chooser may appear empty after refreshing because websites ca
 
 If screenshot review was unfinished, use **Review detected boxes** to continue.
 
-## 9. Review and submit your observation
+## 11. Review and submit your observation
 
 Before submitting, verify that:
 
@@ -224,3 +254,15 @@ Then:
 After submission, the observation becomes locked. You cannot edit the form or replace evidence unless an authorized user reopens it.
 
 Wait for your partner to complete and submit their observation. Once both testers have submitted, the paired observations can proceed to matching, validation, and review.
+
+## 12. Troubleshooting quick reference
+
+| Message or condition | What to do |
+| --- | --- |
+| Testing window has not opened | Review the assignment and wait for the countdown. |
+| Waiting for your partner to become ready | Coordinate only readiness and start timing; do not discuss quote values. |
+| Evidence uploads are locked | Complete all six capture acknowledgements and select **Unlock evidence upload**. |
+| Waiting for OCR / Processing screenshot OCR | Keep the page open or return later; processing and retry state are stored. |
+| OCR failed after three attempts | Record the exact message and contact the coordinator. Replace files only when instructed or when the attempt itself is invalid. |
+| Waiting for your partner's evidence | Your evidence is safe; final details open after both testers complete required evidence. |
+| Correct ride, fare, or time is not offered | Repeat the controlled attempt as directed and replace both screenshot and recording from the same attempt. |

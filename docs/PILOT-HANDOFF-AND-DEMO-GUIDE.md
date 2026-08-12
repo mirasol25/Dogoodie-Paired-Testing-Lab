@@ -4,8 +4,9 @@
 
 **Audience:** pilot owners, administrators, coordinators, testers, reviewers, viewers, and deployment maintainers  
 **Document status:** current-build operating guide  
-**Last updated:** 10 August 2026  
-**System of record:** the deployed application and its linked Supabase project
+**Last updated:** 12 August 2026<br>
+**Production URL:** [https://pairedtesting-lab.vercel.app/](https://pairedtesting-lab.vercel.app/)<br>
+**System of record:** the deployed application, its linked Supabase project, and the release commit recorded in the technical handoff
 
 > This system organizes controlled paired pricing observations. It does not, by itself, prove discrimination, causation, intent, liability, statistical significance, scientific validity, or legal admissibility. Qualified methodology and legal reviewers remain responsible for study design and interpretation.
 
@@ -32,9 +33,9 @@ Use this section during a pilot. Use the later sections for preparation, trainin
 1. Each tester opens **Assigned Studies**, selects the study, opens the featured **Next assignment**, and verifies the locked route, service/tier, condition, instructions, and window.
 2. Each tester completes the readiness checklist and selects **Confirm ready**.
 3. During the allowed window, each tester selects **Start test**. Synchronized assignments require both testers to be ready.
-4. Each tester follows the locked route and service/tier, captures the quote without booking, and preserves the required evidence.
-5. Each tester uploads the screenshot first, confirms the selected OCR fare/service result, then uploads any required recording.
-6. Each tester completes the observation, saves the latest changes, reviews the record, and selects **Submit observation**. The application then shows a read-only submission receipt.
+4. Each tester follows the in-app capture procedure, acknowledges every capture-checklist item, and unlocks evidence upload.
+5. Each tester uploads the screenshot first. Google Cloud Vision processes it asynchronously; the tester confirms the correct detected ride card, fare, and status-bar time, then uploads the required recording.
+6. After both testers' evidence sets are complete, each tester completes the remaining observation details, saves the latest changes, reviews the record, and selects **Submit and lock** independently. The application then shows a read-only submission receipt.
 7. After both sides submit, the system creates one matched pair and runs technical validation.
 8. A reviewer examines both observations, validation results, and evidence before recording a decision.
 
@@ -124,6 +125,8 @@ The application now uses clean public paths such as `/dashboard`, `/studies`, `/
 - Public registration is disabled.
 - Invitation and password-recovery links work on the deployed domain.
 - Private evidence storage policies and size limits are confirmed.
+- Google Cloud Vision is enabled and `OCR_PROVIDER=google` plus the three server-only Google credential variables are configured.
+- A sanitized test screenshot completes OCR and opens the candidate-confirmation screen.
 - Backup, retention, monitoring, incident response, and key-rotation ownership are assigned.
 
 ### Gate B: Study design ready
@@ -234,13 +237,13 @@ Before test day:
 2. Complete all readiness items and select **Confirm ready**.
 3. Select **Start test** only within the allowed tester-side window.
 4. Follow the countdown or independent-start instruction.
-5. Open the external provider app using the exact locked route and service/tier.
-6. Capture the quote without booking.
-7. Preserve the complete required screenshot and status-bar time. Do not crop, blur, annotate, or edit evidence.
-8. Upload the screenshot first and confirm the correct OCR fare/service candidate. Replace unreadable or mismatched evidence.
-9. Upload the required recording.
-10. Complete the current observation fields, including app version and network information when requested.
-11. Save the latest changes, review the record, and select **Submit observation**.
+5. Follow the displayed capture steps or open the video tutorial. Start screen recording, use the exact locked route and service/tier, capture the quote without booking, take the full-screen screenshot, then stop and save the recording.
+6. Complete every **Confirm before uploading** item and select **Unlock evidence upload**.
+7. Upload the screenshot first. While Google Cloud Vision is working, the page shows **waiting for OCR** or **Processing screenshot OCR**; the job is retried automatically after temporary failures.
+8. When candidate review opens, select the complete ride card, the fare inside that card, and the device time in the status bar. Replace both evidence files when the correct values are unavailable or the attempt must be repeated.
+9. Upload the required screen recording. When your evidence is complete, the application may show **Waiting for [partner]'s evidence**.
+10. After both evidence sets are ready, capture the current location and complete only the observation fields required by the active protocol, such as app version, network category, battery percentage, or notes.
+11. Select **Save draft**, then **Review and submit**, verify the confirmation checklist, and select **Submit and lock**.
 12. Confirm the read-only submission receipt shows the assignment, condition, fare, evidence count, route, and submission time. Return to the study assignment list; no further editing is available unless the record is formally reopened.
 
 Submission locks the observation. Do not repeatedly resubmit after an error; record the exact error and escalate.
@@ -291,6 +294,10 @@ Never repair a failed test by editing evidence, coordinating fares, or changing 
 | Situation | Action |
 |---|---|
 | Tester cannot start | Verify readiness, partner readiness for synchronized work, and tester-side window. |
+| Evidence uploads remain locked | Complete all six capture acknowledgements and select **Unlock evidence upload**. |
+| Screenshot shows queued/processing | Keep the page open or return later; the persisted OCR job is retried automatically. Record the assignment and evidence identifiers if it does not progress. |
+| OCR fails after three attempts | Replace the screenshot only when the file is invalid; otherwise record the error and escalate so provider configuration and the job can be inspected. |
+| Tester is waiting after completing evidence | The workflow intentionally waits for the partner's complete screenshot confirmation and recording before opening final session details. |
 | Observation cannot save | Verify Device Profile, required fields, and timestamp/window. |
 | Observation cannot submit | Verify confirmed screenshot, correct service, latest saved changes, and all required evidence. |
 | Pair does not appear | Confirm both tester slots show submitted; capture codes and exact error before escalating. |
@@ -380,7 +387,7 @@ Use a clearly labeled training study and approved demonstration evidence. Do not
 
 The receiving operator needs these non-secret references:
 
-- Production and preview application URLs.
+- Production URL (`https://pairedtesting-lab.vercel.app/`) and any preview application URLs.
 - Supabase project name/reference and owner.
 - Vercel project and deployment owner.
 - Migration maintainer.
@@ -397,9 +404,13 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 NEXT_PUBLIC_SITE_URL
 SUPABASE_SECRET_KEY
+OCR_PROVIDER
+GOOGLE_CLOUD_PROJECT_ID
+GOOGLE_CLOUD_CLIENT_EMAIL
+GOOGLE_CLOUD_PRIVATE_KEY
 ```
 
-`SUPABASE_SECRET_KEY` is server-only and must never use the `NEXT_PUBLIC_` prefix.
+`SUPABASE_SECRET_KEY`, `GOOGLE_CLOUD_CLIENT_EMAIL`, and `GOOGLE_CLOUD_PRIVATE_KEY` are server-only and must never use the `NEXT_PUBLIC_` prefix. Production uses `OCR_PROVIDER=google`; Tesseract is an explicit controlled fallback and is never selected silently.
 
 ### Developer verification
 
@@ -445,6 +456,9 @@ Run these checks after deploying the current navigation/study-workspace update:
 - [ ] The Dashboard scope selector changes between portfolio and one-study computations without mixing totals.
 - [ ] The Reports library filters interim/final reports and opens the correct study report.
 - [ ] A tester sees only their paired roster's name, email, and protocol condition—not partner submission data.
+- [ ] Capture acknowledgement unlocks evidence upload, Google Vision OCR progresses through queued/processing/completed states, and correct detected boxes can be confirmed.
+- [ ] A tester with complete evidence sees the partner-waiting state until both evidence sets are ready.
+- [ ] Protocol-configured observation requirements control which final fields are mandatory.
 - [ ] A submitted tester sees a read-only receipt and can return to the study assignment history.
 - [ ] Global and study-scoped Activity Logs show the intended category-filtered events.
 
@@ -454,7 +468,7 @@ Run these checks after deploying the current navigation/study-workspace update:
 
 - No live rideshare API, scraping, automated quote request, booking, or provider notification.
 - No built-in randomization or counterbalancing engine.
-- OCR may misread fare, service, or time and requires tester confirmation.
+- Google Cloud Vision OCR may misread fare, service, or time and requires tester confirmation; external API availability and billing configuration are production dependencies.
 - Geocoding is not a jurisdictional authority.
 - Thresholds, controls, exclusions, sample size, and interpretation require independent approval.
 - Reminders, exception escalation, and replacement scheduling remain partly manual.
