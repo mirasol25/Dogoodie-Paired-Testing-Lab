@@ -66,18 +66,33 @@ Human acceptance checks, including separate-account RLS, mobile tester collectio
 
 ## Routes
 
+The application uses the clean routes below. Access is role-scoped, so users are redirected to the appropriate workspace after sign-in. Legacy `/paired-testing-demo/...` URLs redirect permanently to their clean equivalents.
+
 | Route | Purpose |
 | --- | --- |
 | `/login` | Internal sign-in |
-| `/paired-testing-demo/admin/accounts` | Administrator account invitations and lifecycle |
-| `/paired-testing-demo/studies` | Study creation, lifecycle, route, and membership |
-| `/paired-testing-demo/protocol` | Versioned protocol authoring and publication |
-| `/paired-testing-demo/assignments` | Paired assignment creation and tester workflow |
-| `/paired-testing-demo/pairs` | Deterministic validation and expert review |
-| `/paired-testing-demo/evidence` | Authorized evidence inventory and private viewer |
-| `/paired-testing-demo/audit` | Role-scoped activity history |
-| `/paired-testing-demo/dashboard` | Persisted study metrics and distributions |
-| `/paired-testing-demo/reports` | Memo, CSV/JSON exports, and evidence package |
+| `/forgot-password`, `/reset-password`, `/set-password` | Password recovery and invited-account setup |
+| `/dashboard` | Role-scoped study metrics and distributions |
+| `/studies` | Coordinator study creation and lifecycle management |
+| `/tester-studies` | Tester study and assignment workspace |
+| `/review-studies` | Expert reviewer study queue |
+| `/view-studies` | Released studies for law-firm viewers |
+| `/admin/accounts` | Administrator account invitations and lifecycle |
+| `/device-profile` | Tester device profile management |
+| `/audit` | Role-scoped activity history |
+| `/reports` | Accessible study report library |
+| `/studies/[studyId]` | Study overview and workspace |
+| `/studies/[studyId]/protocol` | Versioned protocol authoring and publication |
+| `/studies/[studyId]/assignments` | Paired assignment creation and collection status |
+| `/studies/[studyId]/pairs` | Deterministic validation and expert-review queue |
+| `/studies/[studyId]/evidence` | Authorized evidence inventory and private viewer |
+| `/studies/[studyId]/activity` | Study-specific activity history |
+| `/studies/[studyId]/members` | Study membership management |
+| `/studies/[studyId]/edit` | Draft study configuration |
+| `/assignments/[assignmentId]` | Tester workflow or coordinator assignment details |
+| `/pairs/[pairId]` | Matched-pair validation and expert review |
+| `/reports/[studyId]` | Study report, exports, and evidence package |
+| `/protocol/print`, `/reports/print` | Printable protocol and report views |
 
 ## Calculation contract
 
