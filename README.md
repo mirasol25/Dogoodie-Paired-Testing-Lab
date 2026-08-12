@@ -6,6 +6,8 @@ The application produces descriptive study records. It does not determine discri
 
 **Deployed application:** [https://pairedtesting-lab.vercel.app/](https://pairedtesting-lab.vercel.app/)
 
+**Demo video:** [Loom demo folder](https://www.loom.com/share/folder/d56388300c42465ebc96f94366316162)
+
 ## Core workflow
 
 1. An administrator invites internal accounts and assigns global roles.
