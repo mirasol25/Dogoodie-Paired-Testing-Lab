@@ -8,6 +8,22 @@ The application produces descriptive study records. It does not determine discri
 
 **Demo video:** [Loom demo folder](https://www.loom.com/share/folder/d56388300c42465ebc96f94366316162)
 
+## Tutorial documents
+
+### Pilot handoff and demo guide
+
+Instructions for preparing, demonstrating, troubleshooting, and handing off the pilot deployment.
+
+- [Read online](./docs/PILOT-HANDOFF-AND-DEMO-GUIDE.md)
+- [Download PDF](./docs/PILOT-HANDOFF-AND-DEMO-GUIDE.pdf)
+
+### Tester instructions
+
+Step-by-step instructions for testers completing assignments, capturing screenshots, confirming OCR results, and submitting evidence.
+
+- [Read online](./docs/TESTER-INSTRUCTIONS.md)
+- [Download PDF](./docs/TESTER-INSTRUCTIONS.pdf)
+
 ## Core workflow
 
 1. An administrator invites internal accounts and assigns global roles.
